@@ -1,0 +1,39 @@
+# Ambientes Virtuais e Dependências
+venv/
+.venv/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Arquivos de ambiente e segredos
+.env
+*.env
+.env.*
+secrets.json
+credentials.json
+
+# Arquivos de Áudio / Vídeo / Saídas de reuniões (temporários ou locais)
+*.mp3
+*.mp4
+*.wav
+*.m4a
+*.webm
+transcripts/
+output/
+downloads/
+temp/
+
+# Arquivos Markdown (ignorar todos os .md exceto README)
+*.md
+!README.md
+!readme.md
+
+# IDEs e Sistema Operacional
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+Desktop.ini
