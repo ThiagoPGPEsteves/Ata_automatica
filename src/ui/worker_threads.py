@@ -81,7 +81,7 @@ class PipelineWorker(QThread):
             self.progress_changed.emit("Iniciando transcrição de áudio com Whisper...", 15)
 
             # Separa os canais em memória ou temporários para diarização
-            mic_wav, teams_wav = split_dual_channel_audio(self.audio_path)
+            mic_wav, teams_wav, _ = split_dual_channel_audio(self.audio_path)
 
             if self._is_cancelled:
                 return
