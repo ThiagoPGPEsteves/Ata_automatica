@@ -73,18 +73,21 @@ class OllamaClient:
         model: Optional[str] = None,
         keep_alive: Optional[str] = None,
         stream_callback: Optional[Callable[[str], None]] = None,
+        on_chunk_callback: Optional[Callable[[str], None]] = None,
     ) -> str:
         """
         Envia prompt para o modelo gerar a ata de reunião.
         Parâmetro 'keep_alive': '0s' é enviado obrigatoriamente para descarregar a RAM.
+        Suporta stream_callback ou on_chunk_callback para streaming de tokens.
         """
+        callback = stream_callback or on_chunk_callback
         selected_model = model or self.default_model
         active_keep_alive = keep_alive if keep_alive is not None else self.keep_alive
 
         payload: Dict[str, Any] = {
             "model": selected_model,
             "prompt": prompt,
-            "stream": stream_callback is not None,
+            "stream": callback is not None,
             "keep_alive": active_keep_alive,  # <-- OBRIGATÓRIO: '0s' libera a memória imediatamente
         }
         if system:
@@ -97,7 +100,7 @@ class OllamaClient:
         )
 
         try:
-            if stream_callback:
+            if callback:
                 # Modo streaming: emite tokens à medida que chegam
                 full_text = []
                 with requests.post(
@@ -118,7 +121,7 @@ class OllamaClient:
                             chunk = json.loads(line.decode("utf-8"))
                             token = chunk.get("response", "")
                             full_text.append(token)
-                            stream_callback(token)
+                            callback(token)
                             if chunk.get("done", False):
                                 break
 

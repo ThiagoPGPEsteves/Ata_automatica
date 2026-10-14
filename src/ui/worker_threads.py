@@ -119,14 +119,71 @@ class PipelineWorker(QThread):
                 if not self._is_cancelled:
                     self.token_streamed.emit(token)
 
-            self.progress_changed.emit("Gerando ata executiva estruturada...", 80)
-            raw_minutes_markdown = client.generate(
-                prompt=user_prompt,
-                system=system_prompt,
-                model=OLLAMA_MODEL,
-                keep_alive=OLLAMA_KEEP_ALIVE,
-                on_chunk_callback=on_chunk,
-            )
+            if not client.is_available():
+                logger.warning("Ollama offline em localhost:11434. Utilizando minuta estruturada a partir da transcrição.")
+                self.progress_changed.emit("Ollama offline. Gerando minuta com transcrição preservada...", 85)
+                raw_minutes_markdown = f"""# ATA DE REUNIÃO: Reunião Microsoft Teams
+
+## 1. Informações Gerais
+- Data: {time.strftime('%d/%m/%Y')}
+- Plataforma: Microsoft Teams (Gravação Local)
+- Participantes: Identificados por canal na transcrição
+
+## 2. Resumo Executivo
+Reunião gravada e transcrita localmente com sucesso. O serviço local do Ollama não estava ativo no momento para síntese automática por IA. O diálogo integral está preservado na aba 'Transcrição Completa'.
+
+## 3. Pautas Discutidas
+### Diálogo da Reunião
+Consulte o conteúdo completo da conversa na aba de transcrição para revisar as pautas abordadas.
+
+## 4. Decisões Tomadas
+- Inicie o Ollama com 'ollama run {OLLAMA_MODEL}' para sínteses automáticas por IA.
+- Preencha ou ajuste as decisões tomadas diretamente nos campos acima antes de exportar.
+
+## 5. Plano de Ação
+| Ação / O Quê | Responsável | Prazo |
+|---|---|---|
+| Revisar transcrição e deliberações | Você | Imediato |
+
+## 6. Próximos Passos e Pendências
+- Encaminhar ata revisada para os participantes.
+"""
+            else:
+                self.progress_changed.emit("Gerando ata executiva com Llama 3.2 3B...", 80)
+                try:
+                    raw_minutes_markdown = client.generate(
+                        prompt=user_prompt,
+                        system=system_prompt,
+                        model=OLLAMA_MODEL,
+                        keep_alive=OLLAMA_KEEP_ALIVE,
+                        stream_callback=on_chunk,
+                    )
+                except Exception as ollama_err:
+                    logger.warning("Falha ao comunicar com Ollama (%s). Usando minuta com transcrição preservada.", ollama_err)
+                    raw_minutes_markdown = f"""# ATA DE REUNIÃO: Reunião Microsoft Teams
+
+## 1. Informações Gerais
+- Data: {time.strftime('%d/%m/%Y')}
+- Participantes: Identificados na transcrição
+
+## 2. Resumo Executivo
+Reunião gravada e transcrita com sucesso. O Ollama retornou uma instabilidade ({ollama_err}). A transcrição completa foi preservada para consulta.
+
+## 3. Pautas Discutidas
+### Diálogo Transcrito
+Consulte a transcrição completa na aba ao lado.
+
+## 4. Decisões Tomadas
+- Ajuste as deliberações manualmente nesta tela.
+
+## 5. Plano de Ação
+| Ação / O Quê | Responsável | Prazo |
+|---|---|---|
+| Revisar ata | Você | Imediato |
+
+## 6. Próximos Passos e Pendências
+- Exportar documento Word.
+"""
 
             if self._is_cancelled:
                 return

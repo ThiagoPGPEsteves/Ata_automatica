@@ -24,6 +24,20 @@ ROOT_DIR = Path(__file__).resolve().parent
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
+# Auto-reexecução com o interpretador do ambiente virtual (.venv):
+# Se o usuário executar 'python run.py' pelo Python global do Windows sem ativar o venv,
+# detecta e transfere a execução de forma transparente para o Python do .venv onde o PyQt6 está instalado.
+venv_python = ROOT_DIR / ".venv" / "Scripts" / "python.exe"
+if venv_python.exists():
+    try:
+        current_exe = Path(sys.executable).resolve()
+        target_exe = venv_python.resolve()
+        if current_exe != target_exe:
+            import subprocess
+            sys.exit(subprocess.call([str(target_exe)] + sys.argv))
+    except Exception as _e:
+        logger.debug("Não foi possível auto-elevar para .venv: %s", _e)
+
 # Configura ID do processo para correta exibição e fixação na barra de tarefas do Windows
 if sys.platform == "win32":
     try:
