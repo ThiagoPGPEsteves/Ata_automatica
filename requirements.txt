@@ -1,0 +1,20 @@
+# Captura de Áudio em Tempo Real no Windows
+pyaudiowpatch>=0.2.12.9
+soundcard>=0.4.6
+numpy>=1.24.0
+
+# Monitoramento de Memória e Sistema
+psutil>=5.9.0
+
+# Transcrição Local (Speech-to-Text)
+faster-whisper>=1.0.0
+
+# Comunicação e LLM
+requests>=2.31.0
+
+# Geração de Documentos Word
+python-docx>=1.1.0
+
+# Interface Gráfica Desktop Nativa
+PyQt6>=6.6.0
+Pillow>=10.0.0
