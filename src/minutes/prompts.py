@@ -49,3 +49,7 @@ TRANSCRIÇÃO COMPLETA DA REUNIÃO:
 Elabore a ata completa no formato Markdown estruturado conforme as diretrizes, garantindo que todas as decisões e o plano de ação estejam claramente destacados."""
 
     return SYSTEM_PROMPT, user_prompt
+
+
+# Alias de conveniência
+get_meeting_minutes_prompts = generate_meeting_minutes_prompt
