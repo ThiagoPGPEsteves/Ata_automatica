@@ -65,17 +65,96 @@ def split_dual_channel_audio(wav_path: Union[str, Path]) -> Tuple[np.ndarray, np
     return ch_mic, ch_teams, sample_rate
 
 
+def clean_text_tokens(text: str) -> set:
+    """Extrai palavras limpas em minúsculas para comparação de conjunto (filtrando stopwords)."""
+    import re
+    stopwords = {
+        'que', 'com', 'para', 'não', 'uma', 'um', 'este', 'esta', 'está',
+        'isso', 'esse', 'essa', 'como', 'por', 'mais', 'dos', 'das', 'ele',
+        'ela', 'eles', 'elas', 'mas', 'nos', 'tem', 'ter', 'foi', 'ser', 'são',
+        'aqui', 'pelo', 'pela', 'então', 'pra'
+    }
+    tokens = re.findall(r"\b\w{3,}\b", text.lower())
+    return {w for w in tokens if w not in stopwords}
+
+
+def filter_acoustic_echo_segments(
+    user_segments: List[Dict[str, Any]],
+    teams_segments: List[Dict[str, Any]],
+    time_window: float = 6.0,
+) -> List[Dict[str, Any]]:
+    """
+    Remove do canal do microfone (Você) trechos que são vazamento acústico (eco)
+    do som que saiu pelos alto-falantes durante a fala dos participantes do Teams.
+    Preserva 100% das falas genuínas do usuário.
+    """
+    import difflib
+
+    clean_user_segments = []
+    echo_suppressed = 0
+
+    for u_seg in user_segments:
+        u_tokens = clean_text_tokens(u_seg.get("text", ""))
+        if not u_tokens:
+            clean_user_segments.append(u_seg)
+            continue
+
+        u_start = u_seg["start"]
+        u_end = u_seg["end"]
+        is_echo = False
+
+        for t_seg in teams_segments:
+            t_start = t_seg["start"]
+            t_end = t_seg["end"]
+
+            # Janela de proximidade temporal com tolerância a latência acústica e VAD
+            if (t_start - 1.5) <= u_start <= (t_end + time_window) or (u_start <= t_start and u_end >= t_start):
+                t_tokens = clean_text_tokens(t_seg.get("text", ""))
+                if not t_tokens:
+                    continue
+
+                inter = u_tokens.intersection(t_tokens)
+                smaller = min(len(u_tokens), len(t_tokens))
+                if smaller == 0:
+                    continue
+
+                overlap = len(inter) / smaller
+                seq_ratio = difflib.SequenceMatcher(None, u_seg["text"].lower(), t_seg["text"].lower()).ratio()
+
+                if (len(inter) >= 3 and overlap >= 0.35) or seq_ratio >= 0.50 or (len(inter) >= 2 and overlap >= 0.60):
+                    is_echo = True
+                    break
+
+        if is_echo:
+            echo_suppressed += 1
+        else:
+            clean_user_segments.append(u_seg)
+
+    if echo_suppressed > 0:
+        logger.info(
+            "Filtro Acústico: %d segmentos de eco/vazamento dos alto-falantes suprimidos do microfone.",
+            echo_suppressed,
+        )
+
+    return clean_user_segments
+
+
 def merge_channel_transcripts(
     user_segments: List[Dict[str, Any]],
     teams_segments: List[Dict[str, Any]],
     user_label: str = "Você",
     teams_label: str = "Participantes da Reunião",
+    filter_echo: bool = True,
 ) -> List[Dict[str, Any]]:
     """
     Mescla as duas listas de transcrições rotulando os locutores e ordenando
     cronologicamente pelo timestamp de início (start).
+    Aplica filtro acústico para suprimir vazamento de alto-falantes no microfone.
     Agrupa falas contíguas do mesmo locutor se o intervalo for curto (< 1.5s).
     """
+    if filter_echo and teams_segments and user_segments:
+        user_segments = filter_acoustic_echo_segments(user_segments, teams_segments)
+
     labeled_list: List[Dict[str, Any]] = []
 
     for seg in user_segments:

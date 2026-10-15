@@ -9,7 +9,7 @@ from pathlib import Path
 from datetime import datetime
 from typing import Optional, List
 
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtCore import Qt, pyqtSignal, QThread
 from PyQt6.QtWidgets import (
     QDialog,
     QVBoxLayout,
@@ -32,8 +32,10 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtGui import QFont
 
-from src.config import OUTPUT_DIR
-from src.minutes.parser import MeetingMinutes, ActionItem
+from src.config import OUTPUT_DIR, OLLAMA_URL, OLLAMA_MODEL, OLLAMA_KEEP_ALIVE
+from src.minutes.parser import MinutesParser, MeetingMinutes, ActionItem
+from src.minutes.ollama_client import OllamaClient
+from src.minutes.prompts import generate_meeting_minutes_prompt
 from src.exporter.docx_builder import DocxMeetingMinutesBuilder
 
 
@@ -283,6 +285,11 @@ class ReviewDialog(QDialog):
         self.btn_copy.clicked.connect(self._copy_to_clipboard)
         bottom_layout.addWidget(self.btn_copy)
 
+        self.btn_regenerate = QPushButton("✨ Gerar / Regenerar com IA", self)
+        self.btn_regenerate.setObjectName("btnSecondary")
+        self.btn_regenerate.clicked.connect(self._regenerate_minutes_with_ai)
+        bottom_layout.addWidget(self.btn_regenerate)
+
         bottom_layout.addStretch()
 
         self.btn_close = QPushButton("Fechar", self)
@@ -388,6 +395,21 @@ class ReviewDialog(QDialog):
         """Gera o documento Word oficial com os dados da interface."""
         minutes_to_export = self._collect_edited_minutes()
 
+        if not minutes_to_export.executive_summary.strip() and not minutes_to_export.decisions:
+            reply = QMessageBox.question(
+                self,
+                "Ata sem Conteúdo",
+                "A ata ainda não possui Resumo Executivo ou Decisões preenchidas.\n\n"
+                "Deseja gerar o conteúdo agora utilizando a IA local (Ollama)?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No | QMessageBox.StandardButton.Cancel,
+                QMessageBox.StandardButton.Yes,
+            )
+            if reply == QMessageBox.StandardButton.Yes:
+                self._regenerate_minutes_with_ai()
+                return
+            elif reply == QMessageBox.StandardButton.Cancel:
+                return
+
         default_filename = f"Ata_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx"
         default_filepath = OUTPUT_DIR / default_filename
 
@@ -425,6 +447,76 @@ class ReviewDialog(QDialog):
 
         except Exception as err:
             QMessageBox.critical(self, "Erro na Exportação", f"Falha ao gerar documento Word:\n{err}")
+
+    def _regenerate_minutes_with_ai(self):
+        """Regenera a ata com IA a partir do texto presente na aba Transcrição."""
+        transcript = self.txt_transcript.toPlainText().strip()
+        if not transcript:
+            QMessageBox.warning(self, "Aviso", "Não há transcrição disponível para gerar a ata.")
+            return
+
+        client = OllamaClient()
+        if not client.is_available():
+            QMessageBox.critical(
+                self,
+                "Ollama Offline",
+                f"O serviço do Ollama não está ativo em {OLLAMA_URL}.\n\n"
+                f"Por favor, inicie o Ollama no Windows ou execute no terminal:\n"
+                f"ollama run {OLLAMA_MODEL}"
+            )
+            return
+
+        self.btn_regenerate.setEnabled(False)
+        self.btn_export.setEnabled(False)
+        self.set_progress("Conectando ao Ollama e gerando ata executiva...", 50)
+        self.txt_streaming.clear()
+        self.tabs.setCurrentIndex(2)
+
+        class RegenerateWorker(QThread):
+            token_received = pyqtSignal(str)
+            finished_success = pyqtSignal(object)
+            finished_error = pyqtSignal(str)
+
+            def __init__(self, transcript_text: str):
+                super().__init__()
+                self.transcript_text = transcript_text
+
+            def run(self):
+                try:
+                    sys_p, usr_p = generate_meeting_minutes_prompt(self.transcript_text)
+                    cl = OllamaClient()
+                    raw_md = cl.generate(
+                        prompt=usr_p,
+                        system=sys_p,
+                        model=OLLAMA_MODEL,
+                        keep_alive=OLLAMA_KEEP_ALIVE,
+                        stream_callback=lambda tok: self.token_received.emit(tok),
+                    )
+                    parsed = MinutesParser.parse(raw_md)
+                    self.finished_success.emit(parsed)
+                except Exception as e:
+                    self.finished_error.emit(str(e))
+
+        self._regen_worker = RegenerateWorker(transcript)
+        self._regen_worker.token_received.connect(self.append_stream_token)
+
+        def on_success(parsed_minutes):
+            self.load_minutes(parsed_minutes, transcript)
+            self.set_progress("Ata sintetizada com sucesso pela IA!", 100)
+            self.btn_regenerate.setEnabled(True)
+            self.btn_export.setEnabled(True)
+            self.tabs.setCurrentIndex(0)
+            QMessageBox.information(self, "Sucesso", "Ata executiva gerada e carregada com sucesso!")
+
+        def on_error(err_msg):
+            self.set_progress(f"Erro ao sintetizar com IA: {err_msg}", 0)
+            self.btn_regenerate.setEnabled(True)
+            self.btn_export.setEnabled(True)
+            QMessageBox.critical(self, "Erro na Geração", f"Falha ao comunicar com Ollama:\n{err_msg}")
+
+        self._regen_worker.finished_success.connect(on_success)
+        self._regen_worker.finished_error.connect(on_error)
+        self._regen_worker.start()
 
     def _copy_to_clipboard(self):
         """Copia o conteúdo estruturado da ata para a área de transferência."""

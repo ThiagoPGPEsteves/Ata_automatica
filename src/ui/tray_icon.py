@@ -51,6 +51,7 @@ class AtaSystemTrayIcon(QSystemTrayIcon):
     resume_requested = pyqtSignal()
     stop_requested = pyqtSignal()
     show_widget_requested = pyqtSignal()
+    settings_requested = pyqtSignal()
     open_output_dir_requested = pyqtSignal()
     exit_requested = pyqtSignal()
 
@@ -113,6 +114,10 @@ class AtaSystemTrayIcon(QSystemTrayIcon):
         self.act_show = QAction("Mostrar Barra Flutuante", self)
         self.act_show.triggered.connect(self.show_widget_requested.emit)
         self.menu.addAction(self.act_show)
+
+        self.act_settings = QAction("⚙ Configurar Áudio & Fones...", self)
+        self.act_settings.triggered.connect(self.settings_requested.emit)
+        self.menu.addAction(self.act_settings)
 
         self.act_open_dir = QAction("Abrir Pasta de Atas (output/)", self)
         self.act_open_dir.triggered.connect(self._open_output_dir)

@@ -130,8 +130,12 @@ class DualAudioRecorder:
         """Retorna os níveis RMS atuais normalizados entre 0.0 e 1.0 (Mic, Teams)."""
         return self._mic_level, self._loopback_level
 
-    def start(self):
-        """Inicia a gravação dual e os fluxos assíncronos."""
+    def start(
+        self,
+        mic_device_id: Optional[int] = None,
+        loopback_device_id: Optional[int] = None,
+    ):
+        """Inicia a gravação dual e os fluxos assíncronos com suporte a dispositivos específicos."""
         if self._is_recording:
             logger.warning("Gravação já está em andamento.")
             return
@@ -148,12 +152,26 @@ class DualAudioRecorder:
         while not self._loop_queue.empty():
             self._loop_queue.get_nowait()
 
-        devices = get_default_devices()
-        mic_dev: Optional[AudioDeviceInfo] = devices.get("mic")
-        loopback_dev: Optional[AudioDeviceInfo] = devices.get("loopback")
+        from src.audio.devices import get_device_by_index, get_default_devices
 
-        logger.info("Dispositivo Mic: %s", mic_dev)
-        logger.info("Dispositivo Loopback: %s", loopback_dev)
+        mic_dev = None
+        if mic_device_id is not None:
+            mic_dev = get_device_by_index(mic_device_id)
+
+        loopback_dev = None
+        if loopback_device_id is not None:
+            loopback_dev = get_device_by_index(loopback_device_id)
+
+        # Fallback para os padrões caso não especificados ou inválidos
+        if not mic_dev or not loopback_dev:
+            defaults = get_default_devices()
+            if not mic_dev:
+                mic_dev = defaults.get("mic")
+            if not loopback_dev:
+                loopback_dev = defaults.get("loopback")
+
+        logger.info("Dispositivo Mic Selecionado: %s", mic_dev)
+        logger.info("Dispositivo Loopback Selecionado: %s", loopback_dev)
 
         import pyaudiowpatch as pyaudio
 

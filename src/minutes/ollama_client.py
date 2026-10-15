@@ -9,7 +9,7 @@ import logging
 from typing import Optional, List, Dict, Any, Callable
 import requests
 
-from src.config import OLLAMA_URL, OLLAMA_MODEL, OLLAMA_KEEP_ALIVE
+from src.config import OLLAMA_URL, OLLAMA_MODEL, OLLAMA_KEEP_ALIVE, OLLAMA_TIMEOUT
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +36,7 @@ class OllamaClient:
         base_url: str = OLLAMA_URL,
         default_model: str = OLLAMA_MODEL,
         keep_alive: str = OLLAMA_KEEP_ALIVE,
-        timeout: float = 120.0,
+        timeout: float = OLLAMA_TIMEOUT,
     ):
         self.base_url = base_url.rstrip("/")
         self.default_model = default_model

@@ -73,6 +73,8 @@ class AtaApplicationController:
         # 1. Componentes do Backend
         self.recorder = DualAudioRecorder()
         self.current_worker: Optional[PipelineWorker] = None
+        self.selected_mic_id: Optional[int] = None
+        self.selected_loopback_id: Optional[int] = None
 
         # 2. Componentes da Interface Gráfica
         self.floating_widget = FloatingWidget(recorder=self.recorder)
@@ -108,6 +110,7 @@ class AtaApplicationController:
         self.floating_widget.pause_requested.connect(self.pause_recording)
         self.floating_widget.resume_requested.connect(self.resume_recording)
         self.floating_widget.stop_requested.connect(self.stop_and_process)
+        self.floating_widget.settings_requested.connect(self.open_audio_settings)
         self.floating_widget.minimize_tray_requested.connect(self.hide_to_tray)
 
         # Ações originadas no Menu da Bandeja (System Tray)
@@ -115,14 +118,39 @@ class AtaApplicationController:
         self.tray_icon.pause_requested.connect(self.pause_recording)
         self.tray_icon.resume_requested.connect(self.resume_recording)
         self.tray_icon.stop_requested.connect(self.stop_and_process)
+        self.tray_icon.settings_requested.connect(self.open_audio_settings)
         self.tray_icon.show_widget_requested.connect(self.show_floating_widget)
         self.tray_icon.exit_requested.connect(self.exit_app)
 
+    def open_audio_settings(self):
+        """Abre a janela de configuração de dispositivos de áudio e fones de ouvido."""
+        from src.ui.audio_settings_dialog import AudioSettingsDialog
+        dialog = AudioSettingsDialog(
+            current_mic_id=self.selected_mic_id,
+            current_loopback_id=self.selected_loopback_id,
+            parent=self.floating_widget,
+        )
+
+        def on_devices_saved(mic_id, loop_id):
+            self.selected_mic_id = mic_id
+            self.selected_loopback_id = loop_id
+            logger.info("Dispositivos de áudio selecionados pelo usuário: Mic=%d, Loopback=%d", mic_id, loop_id)
+
+        dialog.devices_selected.connect(on_devices_saved)
+        dialog.exec()
+
     def start_recording(self):
-        """Inicia a captura de áudio nos canais de Microfone e Teams."""
+        """Inicia a captura de áudio nos canais de Microfone e Teams com os dispositivos configurados."""
         try:
-            logger.info("Iniciando gravação de áudio...")
-            self.recorder.start()
+            logger.info(
+                "Iniciando gravação de áudio (Mic=%s, Loopback=%s)...",
+                self.selected_mic_id,
+                self.selected_loopback_id,
+            )
+            self.recorder.start(
+                mic_device_id=self.selected_mic_id,
+                loopback_device_id=self.selected_loopback_id,
+            )
             self.floating_widget.set_state(RecorderState.RECORDING)
             self.tray_icon.update_state(RecorderState.RECORDING)
             self.tray_icon.notify(

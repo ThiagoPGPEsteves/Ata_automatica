@@ -79,6 +79,7 @@ class FloatingWidget(QWidget):
     pause_requested = pyqtSignal()
     resume_requested = pyqtSignal()
     stop_requested = pyqtSignal()
+    settings_requested = pyqtSignal()
     minimize_tray_requested = pyqtSignal()
 
     def __init__(
@@ -210,7 +211,14 @@ class FloatingWidget(QWidget):
         self.btn_stop.clicked.connect(self._on_stop_clicked)
         layout.addWidget(self.btn_stop)
 
-        # 6. Botão Minimizar para a bandeja
+        # 6. Botão Configurações de Áudio
+        self.btn_settings = QPushButton("⚙", self.main_container)
+        self.btn_settings.setObjectName("btnMinimize")
+        self.btn_settings.setToolTip("Configurar Dispositivos de Áudio (Microfone / Fones)")
+        self.btn_settings.clicked.connect(self.settings_requested.emit)
+        layout.addWidget(self.btn_settings)
+
+        # 7. Botão Minimizar para a bandeja
         self.btn_minimize = QPushButton("🗕", self.main_container)
         self.btn_minimize.setObjectName("btnMinimize")
         self.btn_minimize.setToolTip("Minimizar para a Bandeja do Sistema")

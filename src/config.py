@@ -36,6 +36,7 @@ WHISPER_LANGUAGE = "pt"
 # Configurações de IA (Ollama Local)
 OLLAMA_URL = "http://localhost:11434"
 OLLAMA_MODEL = "llama3.2:3b"
+OLLAMA_TIMEOUT = 300.0  # 5 minutos de tolerância para reuniões longas em CPU
 OLLAMA_KEEP_ALIVE = "0s"  # Descarrega o modelo da RAM imediatamente após a geração
 
 # Arquivos Padrão
