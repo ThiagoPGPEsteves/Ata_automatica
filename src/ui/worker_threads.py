@@ -28,6 +28,7 @@ from src.transcription.post_process import (
 from src.minutes.prompts import generate_meeting_minutes_prompt
 from src.minutes.ollama_client import OllamaClient
 from src.minutes.parser import MinutesParser, MeetingMinutes
+from src.minutes.generator import MinutesGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -83,6 +84,7 @@ class PipelineWorker(QThread):
             user_settings = get_user_settings()
             preferred_model = user_settings.get("model_profile", "auto")
             corporate_glossary = user_settings.get("corporate_glossary")
+            user_speaker_name = user_settings.get("user_speaker_name", "Você")
 
             self.progress_changed.emit("Iniciando transcrição de áudio com Whisper...", 15)
 
@@ -94,7 +96,7 @@ class PipelineWorker(QThread):
 
             # Utiliza o gerenciador de contexto para garantir descarregamento da RAM
             with WhisperEngine(model_size=preferred_model) as engine:
-                self.progress_changed.emit(f"Transcrevendo canal de voz (Você) com Whisper '{engine.model_size}'...", 25)
+                self.progress_changed.emit(f"Transcrevendo canal de voz ({user_speaker_name}) com Whisper '{engine.model_size}'...", 25)
                 mic_segments = engine.transcribe(mic_wav, initial_prompt=corporate_glossary)
 
                 if self._is_cancelled:
@@ -105,12 +107,16 @@ class PipelineWorker(QThread):
 
             # Neste ponto o Whisper foi descarregado e a RAM voltou ao nível base
             self.progress_changed.emit("Whisper descarregado da memória. Sincronizando diálogos...", 60)
-            merged_segments = merge_channel_transcripts(mic_segments, teams_segments)
+            merged_segments = merge_channel_transcripts(
+                mic_segments,
+                teams_segments,
+                user_label=user_speaker_name,
+            )
             transcript_text = format_transcript_dialogue(merged_segments)
 
             # Se a transcrição estiver vazia (ex: teste rápido sem áudio), provê mensagem padrão
             if not transcript_text.strip():
-                transcript_text = "[00:00:00] [Você]: Reunião iniciada sem detecção de voz nos canais de áudio."
+                transcript_text = f"[00:00:00] [{user_speaker_name}]: Reunião iniciada sem detecção de voz nos canais de áudio."
 
             # Persiste a transcrição completa em disco imediatamente para evitar perda de dados
             try:
@@ -142,19 +148,16 @@ class PipelineWorker(QThread):
             except Exception as e:
                 logger.debug("Não foi possível extrair metadados do arquivo de áudio: %s", e)
 
-            # 3. Fase de Geração da Ata Executiva (Ollama com keep_alive: 0s)
-            self.progress_changed.emit("Conectando ao Ollama (Llama 3.2 3B)...", 70)
-            system_prompt, user_prompt = generate_meeting_minutes_prompt(
-                transcript_text,
-                meeting_date=meeting_date_str,
-                meeting_duration=meeting_duration_str,
-            )
-
+            # 3. Fase de Geração da Ata Executiva (MinutesGenerator com Map-Reduce e JSON Schema)
             client = OllamaClient()
 
             def on_chunk(token: str):
                 if not self._is_cancelled:
                     self.token_streamed.emit(token)
+
+            def on_progress(desc: str, pct: int):
+                if not self._is_cancelled:
+                    self.progress_changed.emit(desc, pct)
 
             if not client.is_available():
                 logger.warning("Ollama offline em localhost:11434. Utilizando minuta estruturada a partir da transcrição.")
@@ -165,7 +168,7 @@ class PipelineWorker(QThread):
 - Data: {meeting_date_str}
 - Duração: {meeting_duration_str or 'Não especificada'}
 - Plataforma: Microsoft Teams (Gravação Local)
-- Participantes: Identificados por canal na transcrição
+- Participantes: {user_speaker_name}, Participantes da Reunião
 
 ## 2. Resumo Executivo
 Reunião gravada e transcrita localmente com sucesso. O serviço local do Ollama não estava ativo no momento para síntese automática por IA. O diálogo integral está preservado na aba 'Transcrição Completa'.
@@ -179,30 +182,34 @@ Consulte o conteúdo completo da conversa na aba de transcrição para revisar a
 - Preencha ou ajuste as decisões tomadas diretamente nos campos acima antes de exportar.
 
 ## 5. Plano de Ação
-| Ação / O Quê | Responsável | Prazo |
-|---|---|---|
-| Revisar transcrição e deliberações | Você | Imediato |
+| Ação / O Quê | Responsável | Prazo | Evidência |
+|---|---|---|---|
+| Revisar transcrição e deliberações | {user_speaker_name} | Imediato | - |
 
 ## 6. Próximos Passos e Pendências
 - Encaminhar ata revisada para os participantes.
 """
+                minutes_obj = MinutesParser.parse(raw_minutes_markdown)
             else:
-                self.progress_changed.emit("Gerando ata executiva com Llama 3.2 3B...", 80)
+                self.progress_changed.emit("Iniciando síntese inteligente da ata com IA...", 70)
+                generator = MinutesGenerator(ollama_client=client)
                 try:
-                    raw_minutes_markdown = client.generate(
-                        prompt=user_prompt,
-                        system=system_prompt,
-                        model=OLLAMA_MODEL,
-                        keep_alive=OLLAMA_KEEP_ALIVE,
-                        stream_callback=on_chunk,
+                    minutes_obj, raw_minutes_markdown = generator.generate(
+                        transcript_text=transcript_text,
+                        meeting_date=meeting_date_str,
+                        meeting_duration=meeting_duration_str,
+                        user_speaker_name=user_speaker_name,
+                        progress_callback=on_progress,
+                        token_callback=on_chunk,
                     )
                 except Exception as ollama_err:
                     logger.warning("Falha ao comunicar com Ollama (%s). Usando minuta com transcrição preservada.", ollama_err)
                     raw_minutes_markdown = f"""# ATA DE REUNIÃO: Reunião Microsoft Teams
 
 ## 1. Informações Gerais
-- Data: {time.strftime('%d/%m/%Y')}
-- Participantes: Identificados na transcrição
+- Data: {meeting_date_str}
+- Duração: {meeting_duration_str or 'Não especificada'}
+- Participantes: {user_speaker_name}, Participantes da Reunião
 
 ## 2. Resumo Executivo
 Reunião gravada e transcrita com sucesso. O Ollama retornou uma instabilidade ({ollama_err}). A transcrição completa foi preservada para consulta.
@@ -215,20 +222,17 @@ Consulte a transcrição completa na aba ao lado.
 - Ajuste as deliberações manualmente nesta tela.
 
 ## 5. Plano de Ação
-| Ação / O Quê | Responsável | Prazo |
-|---|---|---|
-| Revisar ata | Você | Imediato |
+| Ação / O Quê | Responsável | Prazo | Evidência |
+|---|---|---|---|
+| Revisar ata | {user_speaker_name} | Imediato | - |
 
 ## 6. Próximos Passos e Pendências
 - Exportar documento Word.
 """
+                    minutes_obj = MinutesParser.parse(raw_minutes_markdown)
 
             if self._is_cancelled:
                 return
-
-            # 4. Parsing Estruturado
-            self.progress_changed.emit("Validando estrutura da ata e matriz de ações...", 95)
-            minutes_obj = MinutesParser.parse(raw_minutes_markdown)
 
             self.progress_changed.emit("Processamento concluído com sucesso!", 100)
             self.pipeline_finished.emit(minutes_obj, transcript_text, str(self.audio_path))

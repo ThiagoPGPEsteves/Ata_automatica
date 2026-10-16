@@ -17,6 +17,7 @@ class ActionItem:
     action: str
     owner: str
     deadline: str
+    evidence_ts: str = ""
 
 
 @dataclass
@@ -34,6 +35,59 @@ class MeetingMinutes:
     def to_dict(self) -> Dict[str, Any]:
         data = asdict(self)
         return data
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "MeetingMinutes":
+        """Instancia MeetingMinutes a partir de um dicionário JSON estruturado."""
+        raw_actions = data.get("action_items", [])
+        action_objs: List[ActionItem] = []
+        for a in raw_actions:
+            if isinstance(a, dict):
+                action_objs.append(
+                    ActionItem(
+                        action=str(a.get("action", "")).strip(),
+                        owner=str(a.get("owner", "")).strip() or "Não definido",
+                        deadline=str(a.get("deadline", "")).strip() or "Não definido",
+                        evidence_ts=str(a.get("evidence_ts", "")).strip(),
+                    )
+                )
+            elif isinstance(a, ActionItem):
+                action_objs.append(a)
+
+        raw_decisions = data.get("decisions", [])
+        decisions_list: List[str] = []
+        for d in raw_decisions:
+            if isinstance(d, dict):
+                dec_text = str(d.get("decision", "")).strip()
+                ev = str(d.get("evidence_ts", "")).strip()
+                if ev and f"[{ev}]" not in dec_text:
+                    dec_text = f"{dec_text} [{ev}]"
+                if dec_text:
+                    decisions_list.append(dec_text)
+            elif isinstance(d, str):
+                if d.strip():
+                    decisions_list.append(d.strip())
+
+        raw_topics = data.get("topics", [])
+        topics_list: List[Dict[str, str]] = []
+        for t in raw_topics:
+            if isinstance(t, dict):
+                topics_list.append({
+                    "topic": str(t.get("topic", "")).strip(),
+                    "details": str(t.get("details", "")).strip(),
+                })
+
+        return cls(
+            title=str(data.get("title", "Ata de Reunião")).strip(),
+            date=str(data.get("date", "")).strip(),
+            participants=[str(p).strip() for p in data.get("participants", []) if str(p).strip()],
+            executive_summary=str(data.get("executive_summary", "")).strip(),
+            topics=topics_list,
+            decisions=decisions_list,
+            action_items=action_objs,
+            next_steps=[str(s).strip() for s in data.get("next_steps", []) if str(s).strip()],
+            raw_markdown=str(data.get("raw_markdown", "")),
+        )
 
 
 class MinutesParser:
@@ -168,7 +222,7 @@ class MinutesParser:
     @classmethod
     def _parse_action_items(cls, content: str) -> List[ActionItem]:
         """
-        Extrai itens de ação prioritariamente da tabela Markdown (| Ação | Responsável | Prazo |).
+        Extrai itens de ação prioritariamente da tabela Markdown (| Ação | Responsável | Prazo | Evidência |).
         Caso o modelo não tenha gerado tabela, tenta extrair de lista com marcadores.
         """
         actions: List[ActionItem] = []
@@ -181,9 +235,22 @@ class MinutesParser:
                 cells = [c.strip() for c in row.split("|")[1:-1]]
                 if len(cells) >= 3:
                     action_text, owner, deadline = cells[0], cells[1], cells[2]
+                    evidence_ts = cells[3] if len(cells) >= 4 else ""
+                    # Se evidence_ts não estiver em coluna própria, tenta extrair do texto
+                    if not evidence_ts:
+                        ts_m = re.search(r"\[(\d{1,2}:\d{2}(?::\d{2})?)\]", action_text)
+                        if ts_m:
+                            evidence_ts = ts_m.group(1)
                     # Ignora linhas divisórias residuais
                     if not all(c == "-" for c in action_text.replace(" ", "")):
-                        actions.append(ActionItem(action=action_text, owner=owner, deadline=deadline))
+                        actions.append(
+                            ActionItem(
+                                action=action_text,
+                                owner=owner or "Não definido",
+                                deadline=deadline or "Não definido",
+                                evidence_ts=evidence_ts,
+                            )
+                        )
             if actions:
                 return actions
 
@@ -193,9 +260,13 @@ class MinutesParser:
             match = re.match(r"^(?:[-*]|\d+\.)\s+(.+)$", line)
             if match:
                 full_text = match.group(1).strip()
-                # Tenta extrair padrões comuns
                 owner = "Não definido"
                 deadline = "Não definido"
+                evidence_ts = ""
+
+                ts_m = re.search(r"\[(\d{1,2}:\d{2}(?::\d{2})?)\]", full_text)
+                if ts_m:
+                    evidence_ts = ts_m.group(1)
 
                 owner_match = re.search(r"\(?(?:Responsável|Quem|Por)[:\s]+([^,\)\;]+)", full_text, re.IGNORECASE)
                 if owner_match:
@@ -206,6 +277,13 @@ class MinutesParser:
                     deadline = deadline_match.group(1).strip()
 
                 clean_action = re.sub(r"\(?(?:Responsável|Quem|Prazo|Quando)[^\)]*\)?", "", full_text).strip(" -:;,")
-                actions.append(ActionItem(action=clean_action or full_text, owner=owner, deadline=deadline))
+                actions.append(
+                    ActionItem(
+                        action=clean_action or full_text,
+                        owner=owner,
+                        deadline=deadline,
+                        evidence_ts=evidence_ts,
+                    )
+                )
 
         return actions

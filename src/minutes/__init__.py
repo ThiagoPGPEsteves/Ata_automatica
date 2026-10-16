@@ -9,6 +9,7 @@ from src.minutes.ollama_client import (
 )
 from src.minutes.prompts import generate_meeting_minutes_prompt, SYSTEM_PROMPT
 from src.minutes.parser import MinutesParser, MeetingMinutes, ActionItem
+from src.minutes.generator import MinutesGenerator
 
 __all__ = [
     "OllamaClient",
@@ -19,4 +20,5 @@ __all__ = [
     "MinutesParser",
     "MeetingMinutes",
     "ActionItem",
+    "MinutesGenerator",
 ]

@@ -267,7 +267,12 @@ class DocxMeetingMinutesBuilder:
             row = table.rows[r_idx]
             bg_color = CorporatePalette.HEX_ZEBRA_ODD if r_idx % 2 == 1 else CorporatePalette.HEX_ZEBRA_EVEN
 
-            values = [item.action, item.owner, item.deadline]
+            act_text = item.action
+            ev = getattr(item, "evidence_ts", "")
+            if ev and f"[{ev}]" not in act_text and f"({ev})" not in act_text and f"ref: {ev}" not in act_text:
+                act_text = f"{act_text} (ref: {ev})"
+
+            values = [act_text, item.owner, item.deadline]
             for c_idx, val in enumerate(values):
                 cell = row.cells[c_idx]
                 cell.width = col_widths[c_idx]

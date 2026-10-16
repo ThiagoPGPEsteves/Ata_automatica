@@ -15,6 +15,7 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QFrame,
     QTextEdit,
+    QLineEdit,
     QMessageBox,
 )
 from PyQt6.QtGui import QFont
@@ -87,6 +88,14 @@ class AudioSettingsDialog(QDialog):
             QComboBox::drop-down {
                 border: none;
             }
+            QLineEdit {
+                background-color: #2D3748;
+                color: #FFFFFF;
+                border: 1px solid #4A5568;
+                border-radius: 6px;
+                padding: 6px 12px;
+                font-size: 12px;
+            }
             QComboBox QAbstractItemView {
                 background-color: #2D3748;
                 color: #FFFFFF;
@@ -149,6 +158,12 @@ class AudioSettingsDialog(QDialog):
         )
         lbl_desc.setStyleSheet("color: #94A3B8; font-size: 11px; font-weight: normal;")
         layout.addWidget(lbl_desc)
+
+        # 0. Nome do Usuário na Transcrição
+        layout.addWidget(QLabel("SEU NOME (SUBSTITUI '[Você]' NA TRANSCRIÇÃO E NA MATRIZ DE AÇÕES):", self))
+        self.txt_user_name = QLineEdit(self)
+        self.txt_user_name.setPlaceholderText("Ex: Thiago Esteves (ou seu primeiro nome)")
+        layout.addWidget(self.txt_user_name)
 
         # 1. Microfone do Usuário
         layout.addWidget(QLabel("MICROFONE (SUA VOZ / CANAL 0):", self))
@@ -273,6 +288,9 @@ class AudioSettingsDialog(QDialog):
         glossary_text = self.saved_settings.get("corporate_glossary", DEFAULT_CORPORATE_GLOSSARY)
         self.txt_glossary.setPlainText(glossary_text)
 
+        user_name = self.saved_settings.get("user_speaker_name", "Você")
+        self.txt_user_name.setText(user_name)
+
     def _on_save_clicked(self):
         """Salva as escolhas do usuário no arquivo config_user.json (ID e nome) e emite o sinal."""
         mic_id = self.combo_mic.currentData()
@@ -297,6 +315,8 @@ class AudioSettingsDialog(QDialog):
                 loop_name = dev.name
                 break
 
+        user_name = self.txt_user_name.text().strip() or "Você"
+
         # Salva persistentemente
         save_user_settings({
             "mic_device_id": self.current_mic_id,
@@ -305,6 +325,7 @@ class AudioSettingsDialog(QDialog):
             "loopback_device_name": loop_name,
             "model_profile": model_profile,
             "corporate_glossary": glossary_text,
+            "user_speaker_name": user_name,
         })
 
         self.devices_selected.emit(self.current_mic_id or 0, self.current_loopback_id or 0)

@@ -6,7 +6,7 @@ de 'keep_alive': '0s' para purgar o modelo da memória RAM logo após a resposta
 
 import json
 import logging
-from typing import Optional, List, Dict, Any, Callable
+from typing import Optional, List, Dict, Any, Callable, Union
 import requests
 
 from src.config import OLLAMA_URL, OLLAMA_MODEL, OLLAMA_KEEP_ALIVE, OLLAMA_TIMEOUT, OLLAMA_NUM_CTX
@@ -76,12 +76,14 @@ class OllamaClient:
         keep_alive: Optional[str] = None,
         num_ctx: Optional[int] = None,
         options: Optional[Dict[str, Any]] = None,
+        response_format: Optional[Union[str, Dict[str, Any]]] = None,
         stream_callback: Optional[Callable[[str], None]] = None,
         on_chunk_callback: Optional[Callable[[str], None]] = None,
     ) -> str:
         """
         Envia prompt para o modelo gerar a ata de reunião.
         Parâmetro 'keep_alive': '0s' é enviado obrigatoriamente para descarregar a RAM.
+        Suporta response_format para JSON Schema nativo ou 'json'.
         Suporta stream_callback ou on_chunk_callback para streaming de tokens.
         """
         callback = stream_callback or on_chunk_callback
@@ -105,6 +107,8 @@ class OllamaClient:
         }
         if system:
             payload["system"] = system
+        if response_format:
+            payload["format"] = response_format
 
         def _check_truncation(meta: dict):
             prompt_eval = meta.get("prompt_eval_count")

@@ -5,6 +5,7 @@ da ata gerada pela IA e exportar o documento oficial em formato Microsoft Word (
 """
 
 import os
+import re
 from pathlib import Path
 from datetime import datetime
 from typing import Optional, List
@@ -36,6 +37,7 @@ from src.config import OUTPUT_DIR, OLLAMA_URL, OLLAMA_MODEL, OLLAMA_KEEP_ALIVE
 from src.minutes.parser import MinutesParser, MeetingMinutes, ActionItem
 from src.minutes.ollama_client import OllamaClient
 from src.minutes.prompts import generate_meeting_minutes_prompt
+from src.minutes.generator import MinutesGenerator
 from src.exporter.docx_builder import DocxMeetingMinutesBuilder
 
 
@@ -244,12 +246,14 @@ class ReviewDialog(QDialog):
 
         t1_layout.addLayout(actions_header_layout)
 
-        self.table_actions = QTableWidget(0, 3)
-        self.table_actions.setHorizontalHeaderLabels(["Ação / Deliberação", "Responsável", "Prazo"])
+        self.table_actions = QTableWidget(0, 4)
+        self.table_actions.setHorizontalHeaderLabels(["Ação / Deliberação", "Responsável", "Prazo", "Evidência"])
         self.table_actions.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         self.table_actions.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         self.table_actions.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        self.table_actions.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
         self.table_actions.setFixedHeight(120)
+        self.table_actions.cellDoubleClicked.connect(self._on_action_double_clicked)
         t1_layout.addWidget(self.table_actions)
 
         self.tabs.addTab(tab_minutes, "📄 Ata Executiva")
@@ -333,20 +337,46 @@ class ReviewDialog(QDialog):
         # Preenche tabela de ações
         self.table_actions.setRowCount(0)
         for item in minutes.action_items:
-            self._insert_action_row(item.action, item.owner, item.deadline)
+            self._insert_action_row(item.action, item.owner, item.deadline, getattr(item, "evidence_ts", ""))
 
         # Seleciona a aba da ata
         self.tabs.setCurrentIndex(0)
 
-    def _insert_action_row(self, action: str, owner: str, deadline: str):
+    def _on_action_double_clicked(self, row: int, col: int):
+        """Ao clicar duas vezes em uma ação, navega e salta para o ponto correspondente na transcrição."""
+        evidence_item = self.table_actions.item(row, 3)
+        act_item = self.table_actions.item(row, 0)
+        ts = evidence_item.text().strip() if evidence_item else ""
+        if not ts and act_item:
+            m = re.search(r"(\d{1,2}:\d{2}(?::\d{2})?)", act_item.text())
+            if m:
+                ts = m.group(1)
+
+        if not ts:
+            return
+
+        # Alterna para a aba de transcrição
+        self.tabs.setCurrentIndex(1)
+
+        # Procura o timestamp no texto da transcrição
+        doc = self.txt_transcript.document()
+        cursor = doc.find(ts)
+        if not cursor.isNull():
+            self.txt_transcript.setTextCursor(cursor)
+            self.txt_transcript.ensureCursorVisible()
+
+    def _insert_action_row(self, action: str, owner: str, deadline: str, evidence_ts: str = ""):
         row = self.table_actions.rowCount()
         self.table_actions.insertRow(row)
         self.table_actions.setItem(row, 0, QTableWidgetItem(action))
         self.table_actions.setItem(row, 1, QTableWidgetItem(owner))
         self.table_actions.setItem(row, 2, QTableWidgetItem(deadline))
+        item_ev = QTableWidgetItem(evidence_ts)
+        item_ev.setToolTip("Clique duas vezes para navegar até a fala na transcrição")
+        self.table_actions.setItem(row, 3, item_ev)
 
     def _add_action_row(self):
-        self._insert_action_row("Nova ação a definir", "Responsável", "Prazo")
+        self._insert_action_row("Nova ação a definir", "Responsável", "Prazo", "")
 
     def _remove_action_row(self):
         curr_row = self.table_actions.currentRow()
@@ -369,12 +399,14 @@ class ReviewDialog(QDialog):
             act_item = self.table_actions.item(r, 0)
             own_item = self.table_actions.item(r, 1)
             dea_item = self.table_actions.item(r, 2)
+            evi_item = self.table_actions.item(r, 3)
 
             act = act_item.text().strip() if act_item else ""
             own = own_item.text().strip() if own_item else ""
             dea = dea_item.text().strip() if dea_item else ""
+            evi = evi_item.text().strip() if evi_item else ""
             if act:
-                action_items.append(ActionItem(action=act, owner=own, deadline=dea))
+                action_items.append(ActionItem(action=act, owner=own, deadline=dea, evidence_ts=evi))
 
         # Tópicos mantidos da extração original se existirem
         topics = self.current_minutes.topics if self.current_minutes else []
@@ -474,6 +506,7 @@ class ReviewDialog(QDialog):
 
         class RegenerateWorker(QThread):
             token_received = pyqtSignal(str)
+            progress_updated = pyqtSignal(str, int)
             finished_success = pyqtSignal(object)
             finished_error = pyqtSignal(str)
 
@@ -483,22 +516,24 @@ class ReviewDialog(QDialog):
 
             def run(self):
                 try:
-                    sys_p, usr_p = generate_meeting_minutes_prompt(self.transcript_text)
-                    cl = OllamaClient()
-                    raw_md = cl.generate(
-                        prompt=usr_p,
-                        system=sys_p,
-                        model=OLLAMA_MODEL,
-                        keep_alive=OLLAMA_KEEP_ALIVE,
-                        stream_callback=lambda tok: self.token_received.emit(tok),
+                    from src.config import get_user_settings
+                    user_settings = get_user_settings()
+                    user_speaker_name = user_settings.get("user_speaker_name", "Você")
+
+                    gen = MinutesGenerator()
+                    minutes_obj, _ = gen.generate(
+                        transcript_text=self.transcript_text,
+                        user_speaker_name=user_speaker_name,
+                        progress_callback=lambda desc, pct: self.progress_updated.emit(desc, pct),
+                        token_callback=lambda tok: self.token_received.emit(tok),
                     )
-                    parsed = MinutesParser.parse(raw_md)
-                    self.finished_success.emit(parsed)
+                    self.finished_success.emit(minutes_obj)
                 except Exception as e:
                     self.finished_error.emit(str(e))
 
         self._regen_worker = RegenerateWorker(transcript)
         self._regen_worker.token_received.connect(self.append_stream_token)
+        self._regen_worker.progress_updated.connect(self.set_progress)
 
         def on_success(parsed_minutes):
             self.load_minutes(parsed_minutes, transcript)
