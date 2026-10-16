@@ -98,6 +98,7 @@ class AtaApplicationController:
 
         # 1. Componentes do Backend
         self.recorder = DualAudioRecorder()
+        self.active_session = None
         self.current_worker: Optional[PipelineWorker] = None
         saved_prefs = get_user_settings()
         self.selected_mic_id: Optional[int] = saved_prefs.get("mic_device_id")
@@ -180,6 +181,15 @@ class AtaApplicationController:
     def start_recording(self):
         """Inicia a captura de áudio nos canais de Microfone e Teams com os dispositivos configurados."""
         try:
+            from src.pipeline.session import SessionStore
+            store = SessionStore()
+            self.active_session = store.create_session()
+            logger.info("Nova sessão alocada para gravação direta: %s", self.active_session.session_id)
+
+            # Gravação em streaming direto no diretório da sessão
+            self.recorder = DualAudioRecorder(output_path=self.active_session.audio_path)
+            self.floating_widget.recorder = self.recorder
+
             logger.info(
                 "Iniciando gravação de áudio (Mic='%s' [ID %s], Loopback='%s' [ID %s])...",
                 self.selected_mic_name,
@@ -236,7 +246,10 @@ class AtaApplicationController:
         self.review_dialog.activateWindow()
 
         # Cria e inicia o worker em thread secundária (QThread)
-        self.current_worker = PipelineWorker(recorder=self.recorder)
+        self.current_worker = PipelineWorker(
+            recorder=self.recorder,
+            session=self.active_session,
+        )
         self.current_worker.progress_changed.connect(self.review_dialog.set_progress)
         self.current_worker.token_streamed.connect(self.review_dialog.append_stream_token)
         self.current_worker.pipeline_finished.connect(self._on_pipeline_finished)
@@ -306,7 +319,7 @@ class AtaApplicationController:
                 pass
         if self.current_worker and self.current_worker.isRunning():
             self.current_worker.cancel()
-            self.current_worker.wait(2000)
+            self.current_worker.wait(5000)
 
     def run(self) -> int:
         """Inicia o loop de eventos do Qt."""

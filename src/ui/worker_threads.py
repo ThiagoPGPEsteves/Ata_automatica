@@ -40,14 +40,15 @@ class PipelineWorker(QThread):
         recorder: Optional[DualAudioRecorder] = None,
         audio_path: Optional[Path] = None,
         session_id: Optional[str] = None,
+        session: Optional[MeetingSession] = None,
         parent: Optional[QObject] = None,
     ):
         super().__init__(parent)
         self.recorder = recorder
-        self.audio_path = audio_path or DEFAULT_RECORDING_PATH
-        self.session_id = session_id
+        self._session = session
+        self.audio_path = audio_path or (session.audio_path if session else DEFAULT_RECORDING_PATH)
+        self.session_id = session_id or (session.session_id if session else None)
         self.cancel_token = CancelToken()
-        self._session: Optional[MeetingSession] = None
 
     def cancel(self):
         """Sinaliza cancelamento cooperativo imediato do pipeline."""
@@ -81,14 +82,17 @@ class PipelineWorker(QThread):
             if self.cancel_token.is_cancelled:
                 return
 
-            # 2. Inicializa a sessão persistente em sessions/<session_id>/
+            # 2. Inicializa a sessão persistente em sessions/<session_id>/ (se ainda não fornecida)
             store = SessionStore()
-            self._session = store.create_session(self.session_id)
+            if not self._session:
+                self._session = store.create_session(self.session_id)
 
-            # Copia o áudio gravado para a pasta dedicada da sessão
+            # Copia o áudio gravado para a pasta dedicada da sessão apenas se forem caminhos distintos
             if self.audio_path.resolve() != self._session.audio_path.resolve():
                 shutil.copy2(self.audio_path, self._session.audio_path)
                 logger.info("Áudio copiado para a sessão: %s", self._session.audio_path)
+            else:
+                logger.info("Áudio gravado diretamente na sessão (Zero-Copy): %s", self._session.audio_path)
 
             # Limpeza automática de áudios antigos (LGPD)
             settings = get_typed_user_settings()

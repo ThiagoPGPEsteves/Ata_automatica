@@ -226,11 +226,16 @@ class WhisperEngine:
         initial_prompt: Optional[str] = None,
         hotwords: Optional[str] = None,
         cancel_token: Optional[Any] = None,
+        progress_callback: Optional[Callable[..., None]] = None,
+        channel_label: str = "áudio",
+        progress_base_pct: int = 15,
+        progress_scale_pct: int = 25,
     ) -> List[Dict[str, Any]]:
         """
         Transcreve o áudio (arquivo no disco ou array numpy mono 16kHz float32/int16).
         Utiliza hotwords para reaplicação contínua de termos técnicos em cada janela de 30s.
         Suporta cancel_token para interrupção imediata sem travamento de thread.
+        Projeta em tempo real o fator de tempo real (RTF) e estimativa de tempo restante (ETA).
         Retorna uma lista de dicionários contendo start, end e text.
         """
         if not self._is_loaded:
@@ -257,11 +262,15 @@ class WhisperEngine:
             no_repeat_ngram_size=WHISPER_NO_REPEAT_NGRAM_SIZE,
         )
 
+        total_duration = getattr(info, "duration", 0.0) or (len(processed_audio) / 16000.0)
+        from src.utils.telemetry import RTFEstimator
+        rtf_estimator = RTFEstimator(total_duration)
+
         logger.info(
             "Idioma detectado: '%s' com probabilidade %.2f%%. Duração: %.2fs",
             info.language,
             info.language_probability * 100,
-            info.duration,
+            total_duration,
         )
 
         results = []
@@ -280,6 +289,15 @@ class WhisperEngine:
                         "text": text,
                     }
                 )
+
+            if progress_callback:
+                prog_pct, rtf, eta_str = rtf_estimator.update(segment.end)
+                global_pct = progress_base_pct + int((prog_pct / 100.0) * progress_scale_pct)
+                msg = f"Transcrevendo {channel_label}: {int(prog_pct)}% (ETA: {eta_str}, RTF: {rtf:.2f}x)"
+                try:
+                    progress_callback(msg, global_pct)
+                except TypeError:
+                    progress_callback(msg)
 
         logger.info("Transcrição concluída: %d segmentos identificados.", len(results))
         return results

@@ -141,6 +141,8 @@ python run.py
 ### 3. Durante a Reunião
 1. A **Barra Flutuante** aparecerá no topo da tela (sempre visível sobre a janela cheia do Teams).
 2. Clique no botão **`● Gravar`** assim que a reunião começar:
+   - Uma sessão isolada e persistente é alocada em `sessions/AAAA-MM-DD_HHMMSS/`.
+   - O áudio é gravado diretamente na pasta da sessão (*Zero-Copy streaming*).
    - O cronômetro iniciará a contagem.
    - O **mini VU meter dual** mostrará as barras de nível sonoro em tempo real (barra superior = seu microfone; barra inferior = participantes do Teams).
 3. Você pode clicar em **`❚❚ Pausar`** e **`▶ Retomar`** a qualquer momento.
@@ -153,50 +155,83 @@ python run.py
 
 ---
 
+## 🛠️ Comandos de Linha de Comando (CLI Headless)
+
+A aplicação conta com uma CLI completa para automação, reprocessamento e governança de dados:
+
+```powershell
+# 1. Listar todas as reuniões gravadas e seus artefatos (áudio, transcrição, ata, docx)
+python run.py --list-sessions
+
+# 2. Reprocessar uma reunião a partir de uma etapa específica sem reabrir a interface
+python run.py --reprocess 2026-10-16_114213 --from-stage export
+python run.py --reprocess 2026-10-16_114213 --from-stage generate
+
+# 3. Executar o expurgo automático de áudios antigos (LGPD - padrão: 7 dias)
+python run.py --cleanup-audio
+python run.py --cleanup-audio --retention-days 14
+
+# 4. Diagnóstico Clínico de Áudio e Crosstalk (Fase P3)
+python tools/diagnose_audio.py
+python tools/diagnose_audio.py --file sessions/2026-10-16_114213/audio.wav
+
+# 5. Benchmark Científico de Desempenho e Recursos (Fase P4)
+python tools/benchmark_performance.py
+python tools/benchmark_performance.py --file sessions/2026-10-16_114213/audio.wav --models small
+```
+
+---
+
 ## 📂 Estrutura de Diretórios do Projeto
 
 ```
 Ata_automatica/
-├── run.py                   # Ponto de entrada oficial com pre-flight checks e orquestração
+├── run.py                   # Ponto de entrada oficial (GUI PyQt6 e CLI Headless)
+├── tools/
+│   ├── diagnose_audio.py    # Ferramenta clínica de diagnóstico de eco e crosstalk (Fase P3)
+│   └── benchmark_performance.py # Benchmark de desempenho, RTF e auditoria de RAM (Fase P4)
 ├── requirements.txt         # Dependências fixadas otimizadas
 ├── plano.md                 # Especificação técnica e matriz de execução detalhada
 ├── README.md                # Documentação oficial do projeto
 │
 ├── src/
-│   ├── config.py            # Configurações de áudio, caminhos e limites de RAM
+│   ├── config.py            # Configurações de áudio, caminhos, UserSettings e limites de RAM
+│   │
+│   ├── pipeline/            # Módulo de Orquestração Agnóstica (Fase P2)
+│   │   ├── session.py       # SessionStore e MeetingSession com manifests e expurgo LGPD
+│   │   └── meeting_pipeline.py # Orquestrador desacoplado com integração do EchoGate e telemetria
 │   │
 │   ├── audio/               # Módulo 1: Captura de áudio nativa
-│   │   ├── devices.py       # Enumeração de dispositivos WASAPI (Mic e Loopback)
+│   │   ├── devices.py       # Enumeração WASAPI com priorização de Microfone Array
 │   │   ├── disk_writer.py   # Streaming direto em disco (Zero-RAM buffer)
-│   │   └── recorder.py      # Gravador dual assíncrono via callbacks
+│   │   ├── recorder.py      # Gravador dual assíncrono via callbacks
+│   │   └── echo_gate.py     # EchoGate: cancelamento digital de eco e crosstalk (Fase P3)
 │   │
 │   ├── transcription/       # Módulo 2: Transcrição e Diarização
-│   │   ├── whisper_engine.py# faster-whisper CPU int8 com descarregamento de memória
+│   │   ├── whisper_engine.py# faster-whisper CPU int8 com CancelToken cooperativo e ETA/RTF
 │   │   └── post_process.py  # Separação de canais e sincronização por timestamps
 │   │
 │   ├── minutes/             # Módulo 3: Geração da Ata com IA
-│   │   ├── ollama_client.py # Cliente REST local com keep_alive: "0s"
+│   │   ├── ollama_client.py # Cliente REST local com repeat_penalty e timeout por chunk
 │   │   ├── prompts.py       # Templates corporativos formais em português
-│   │   └── parser.py        # Parser estruturado da ata e tabela de ações
+│   │   ├── parser.py        # Parser estruturado da ata e tabela de ações
+│   │   └── generator.py     # MinutesGenerator adaptativo (Single-pass e Map-Reduce)
 │   │
 │   ├── exporter/            # Módulo 4: Construtor Word Executivo
 │   │   ├── styles.py        # Paleta Azul Marinho (#1F4E79), tipografia e XML shading
 │   │   └── docx_builder.py  # Construtor do documento .docx
 │   │
+│   ├── utils/               # Módulo de Utilitários e Telemetria (Fase P4)
+│   │   └── telemetry.py     # SystemMemoryAuditor (App+Ollama), RTFEstimator e VAD
+│   │
 │   └── ui/                  # Módulo 5: Interface Desktop Nativa (PyQt6)
 │       ├── floating_widget.py # Barra flutuante Always-on-Top com cronômetro e VU meter
 │       ├── tray_icon.py       # Ícone na bandeja do Windows com menu de contexto
 │       ├── review_dialog.py   # Janela executiva de revisão, edição e exportação
-│       └── worker_threads.py  # QThread isolando processamento pesado da interface
+│       └── worker_threads.py  # QThread fino adaptando MeetingPipeline para a UI
 │
-├── tests/                   # Bateria de Testes Automatizados
-│   ├── test_audio_recording.py # Testes do gravador WASAPI e streaming em disco
-│   ├── test_transcription.py   # Testes do faster-whisper e liberação de RAM
-│   ├── test_minutes.py         # Testes de prompts corporativos e parser estruturado
-│   ├── test_exporter.py        # Testes de estilos, tabelas zebradas e exportação DOCX
-│   ├── test_ui.py              # Testes headless de widgets, máquina de estados e memória
-│   └── test_end_to_end.py      # Teste integrado ponta a ponta com auditoria contínua de RAM
-│
+├── sessions/                # Histórico imutável de reuniões por data/hora (ignorado no git)
+├── logs/                    # Logs rotativos da aplicação (app.log)
 ├── temp/                    # Arquivos temporários de áudio (ignorado no git)
 └── output/                  # Documentos Word gerados (.docx)
 ```
@@ -205,30 +240,19 @@ Ata_automatica/
 
 ## 🧪 Bateria de Testes Automatizados
 
-Cada módulo do sistema possui uma suíte de testes dedicada:
+O projeto utiliza **pytest** para validação contínua de ponta a ponta:
 
 ```powershell
-# 1. Testar Gravação Dual WASAPI e Zero-RAM Buffer
-python tests/test_audio_recording.py
-
-# 2. Testar faster-whisper, Diarização e Descarregamento de RAM
-python tests/test_transcription.py
-
-# 3. Testar Prompts Corporativos e Parser de Atas do Ollama
-python tests/test_minutes.py
-
-# 4. Testar Construtor de Documentos Word (.docx)
-python tests/test_exporter.py
-
-# 5. Testar Interface Gráfica PyQt6 (Modo Headless Offscreen)
-python tests/test_ui.py
-
-# 6. Testar Ciclo Completo Ponta a Ponta com Auditoria de Memória
-python tests/test_end_to_end.py
+# Executar todos os 39 testes unitários e de integração
+.venv\Scripts\pytest tests/ -v
 ```
 
 ---
 
-## 📄 Licença e Privacidade
+## 📄 Licença e Privacidade (LGPD by Design)
 
-Este projeto é desenvolvido para uso corporativo interno com garantia de **privacidade por design (*Privacy by Design*)**. Todas as operações de captura de áudio, transcrição e inteligência artificial são executadas estritamente de forma local no hardware do usuário.
+Este projeto foi construído para uso corporativo com garantia de **privacidade por design (*Privacy by Design*)**:
+1. **100% Offline e Local**: Todas as operações de captura de áudio, transcrição Whisper e inferência do Ollama são executadas na máquina do usuário, sem transmissão de pacotes para a nuvem.
+2. **Isolamento por Sessão**: Cada reunião possui seus dados salvos em uma pasta exclusiva e identificada.
+3. **Política de Retenção de Áudio**: Arquivos de áudio brutos (`audio.wav`) podem ser expurgados automaticamente após 7 dias via `python run.py --cleanup-audio`, preservando a transcrição e o documento oficial de ata.
+

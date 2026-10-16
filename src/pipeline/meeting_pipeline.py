@@ -16,10 +16,13 @@ from typing import Optional, Callable, Dict, Any, Tuple, List, Union
 from src.config import (
     DEFAULT_TRANSCRIPT_PATH,
     OLLAMA_MODEL,
+    AUDIO_ECHOGATE_ENABLED,
     UserSettings,
     get_typed_user_settings,
 )
 from src.pipeline.session import MeetingSession
+from src.audio.echo_gate import EchoGate
+from src.utils.telemetry import SystemMemoryAuditor, has_speech_activity
 from src.transcription.whisper_engine import WhisperEngine
 from src.transcription.post_process import (
     split_dual_channel_audio,
@@ -288,38 +291,79 @@ class MeetingPipeline:
 
         self._emit_progress("Iniciando transcrição de áudio com Whisper...", 10)
 
-        mic_wav, teams_wav, _ = split_dual_channel_audio(self.session.audio_path)
+        mic_wav, teams_wav, sample_rate = split_dual_channel_audio(self.session.audio_path)
 
         if self.cancel_token.is_cancelled:
             return "", []
+
+        # Fase P3: Supressão Digital de Eco / Crosstalk via EchoGate
+        if getattr(self.settings, "echo_gate_enabled", True) and AUDIO_ECHOGATE_ENABLED:
+            try:
+                self._emit_progress("Aplicando cancelamento de eco e vazamento no sinal com EchoGate...", 15)
+                echo_gate = EchoGate()
+                mic_wav, gate_stats = echo_gate.process(mic_wav, teams_wav, sample_rate=sample_rate)
+                if gate_stats.get("applied"):
+                    logger.info(
+                        "EchoGate suprimiu vazamento: atraso=%.1fms, r=%.3f, quadros=%.1f%%",
+                        gate_stats.get("delay_ms", 0.0),
+                        gate_stats.get("peak_correlation", 0.0),
+                        gate_stats.get("frames_suppressed_pct", 0.0),
+                    )
+            except Exception as eg_err:
+                logger.warning("Falha ao aplicar EchoGate (%s). Prosseguindo com sinal original.", eg_err)
+
+        auditor = SystemMemoryAuditor()
+        auditor.log_memory_checkpoint("Pré-Transcrição Whisper")
 
         preferred_model = self.settings.model_profile
         corporate_glossary = self.settings.corporate_glossary
         user_speaker_name = self.settings.user_speaker_name
 
+        # Fase P4: Skip de Silêncio / VAD Inteligente
+        mic_has_voice = has_speech_activity(mic_wav)
+        teams_has_voice = has_speech_activity(teams_wav)
+
         with WhisperEngine(model_size=preferred_model) as engine:
-            self._emit_progress(
-                f"Transcrevendo canal de voz ({user_speaker_name}) com Whisper '{engine.model_size}'...",
-                25,
-            )
-            mic_segments = engine.transcribe(
-                mic_wav,
-                initial_prompt=corporate_glossary,
-                cancel_token=self.cancel_token,
-            )
+            if mic_has_voice:
+                self._emit_progress(
+                    f"Transcrevendo canal de voz ({user_speaker_name}) com Whisper '{engine.model_size}'...",
+                    20,
+                )
+                mic_segments = engine.transcribe(
+                    mic_wav,
+                    initial_prompt=corporate_glossary,
+                    cancel_token=self.cancel_token,
+                    progress_callback=self._emit_progress,
+                    channel_label=f"voz ({user_speaker_name})",
+                    progress_base_pct=20,
+                    progress_scale_pct=25,
+                )
+            else:
+                logger.info("[VAD] Nenhuma atividade vocal detectada no canal de voz. Pulando Whisper no microfone.")
+                mic_segments = []
 
             if self.cancel_token.is_cancelled:
                 return "", []
 
-            self._emit_progress(
-                f"Transcrevendo canal do Teams (Participantes) com Whisper '{engine.model_size}'...",
-                45,
-            )
-            teams_segments = engine.transcribe(
-                teams_wav,
-                initial_prompt=corporate_glossary,
-                cancel_token=self.cancel_token,
-            )
+            if teams_has_voice:
+                self._emit_progress(
+                    f"Transcrevendo canal do Teams (Participantes) com Whisper '{engine.model_size}'...",
+                    45,
+                )
+                teams_segments = engine.transcribe(
+                    teams_wav,
+                    initial_prompt=corporate_glossary,
+                    cancel_token=self.cancel_token,
+                    progress_callback=self._emit_progress,
+                    channel_label="Teams (Participantes)",
+                    progress_base_pct=45,
+                    progress_scale_pct=25,
+                )
+            else:
+                logger.info("[VAD] Nenhuma atividade vocal detectada no canal do Teams.")
+                teams_segments = []
+
+        auditor.log_memory_checkpoint("Pós-Descarregamento Whisper")
 
         if self.cancel_token.is_cancelled:
             return "", []
@@ -374,6 +418,9 @@ class MeetingPipeline:
         meeting_date_str, meeting_duration_str = extract_audio_metadata(self.session.audio_path)
         user_speaker_name = self.settings.user_speaker_name
 
+        auditor = SystemMemoryAuditor()
+        auditor.log_memory_checkpoint("Pré-Geração Ollama")
+
         client = OllamaClient()
 
         if not client.is_available():
@@ -407,6 +454,8 @@ class MeetingPipeline:
                     user_speaker_name=user_speaker_name,
                     reason=f"Ollama retornou erro durante síntese ({ollama_err}).",
                 )
+
+        auditor.log_memory_checkpoint("Pós-Geração Ollama")
 
         # Salva minutes.json na sessão
         try:

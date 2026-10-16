@@ -55,6 +55,14 @@ AUDIO_DSP_ENABLED = False  # Desativado por padrão: evita corte inadvertido da 
 AUDIO_HIGHPASS_CUTOFF_HZ = 80.0
 AUDIO_PEAK_NORMALIZE = 0.95
 
+# EchoGate: Supressão Inteligente de Eco e Vazamento no Sinal (Fase P3)
+AUDIO_ECHOGATE_ENABLED = True
+ECHOGATE_MIN_CORRELATION = 0.30       # Limiar mínimo de correlação cruzada para ativar o gate
+ECHOGATE_FRAME_MS = 25.0             # Tamanho da janela de análise em milissegundos
+ECHOGATE_MAX_DELAY_MS = 300.0        # Janela máxima de busca de atraso físico mic x loopback
+ECHOGATE_SUPPRESSION_DB = -40.0      # Nível de atenuação de quadros de vazamento acústico/elétrico
+ECHOGATE_DOUBLE_TALK_MARGIN_DB = 6.0 # Margem de energia para preservar voz do usuário em falas simultâneas
+
 # Prompt de Estilo e Glossário Técnico (Hotwords)
 WHISPER_STYLE_PROMPT = (
     "Reunião corporativa no Microsoft Teams com ata executiva, decisões e plano de ação."
@@ -88,6 +96,7 @@ class UserSettings:
     corporate_glossary: str = DEFAULT_CORPORATE_GLOSSARY
     user_speaker_name: str = "Você"
     audio_retention_days: int = 7
+    echo_gate_enabled: bool = True
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -104,6 +113,7 @@ class UserSettings:
             corporate_glossary=str(data.get("corporate_glossary", DEFAULT_CORPORATE_GLOSSARY)),
             user_speaker_name=str(data.get("user_speaker_name", "Você")),
             audio_retention_days=int(data.get("audio_retention_days", 7)),
+            echo_gate_enabled=bool(data.get("echo_gate_enabled", True)),
         )
 
 
