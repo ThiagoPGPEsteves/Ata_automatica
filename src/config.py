@@ -40,18 +40,21 @@ WHISPER_LANGUAGE = "pt"
 
 # Parâmetros Avançados Anti-Repetição / Anti-Alucinação
 WHISPER_CONDITION_ON_PREVIOUS_TEXT = False
-WHISPER_REPETITION_PENALTY = 1.15
-WHISPER_NO_REPEAT_NGRAM_SIZE = 3
+WHISPER_REPETITION_PENALTY = 1.0   # Default Whisper (1.0 = neutro; evita substituição indevida de vocábulos)
+WHISPER_NO_REPEAT_NGRAM_SIZE = 0   # 0 = desativado (evita proibir locuções legítimas como "de acordo com")
 WHISPER_BEAM_SIZE = 3
 
 # Filtros de Áudio DSP
+AUDIO_DSP_ENABLED = False  # Desativado por padrão: evita corte inadvertido da fundamental da voz (80-300Hz)
 AUDIO_HIGHPASS_CUTOFF_HZ = 80.0
 AUDIO_PEAK_NORMALIZE = 0.95
 
-# Glossário Padrão Corporativo
+# Prompt de Estilo e Glossário Técnico (Hotwords)
+WHISPER_STYLE_PROMPT = (
+    "Reunião corporativa no Microsoft Teams com ata executiva, decisões e plano de ação."
+)
 DEFAULT_CORPORATE_GLOSSARY = (
-    "Reunião de negócios e alinhamento no Microsoft Teams com ata executiva: "
-    "CCP, Contraparte Central, Colômbia, PJ, B3, Compliance, Ptax, Liquidação, Ponderação."
+    "CCP, Contraparte Central, Colômbia, PJ, B3, Compliance, Ptax, Liquidação, Ponderação"
 )
 
 # Configurações de IA (Ollama Local)
@@ -59,6 +62,7 @@ OLLAMA_URL = "http://localhost:11434"
 OLLAMA_MODEL = "llama3.2:3b"
 OLLAMA_TIMEOUT = 300.0  # 5 minutos de tolerância para reuniões longas em CPU
 OLLAMA_KEEP_ALIVE = "0s"  # Descarrega o modelo da RAM imediatamente após a geração
+OLLAMA_NUM_CTX = 4096     # Janela explícita de contexto (evita truncamento silencioso de transcrições longas)
 
 # Arquivos Padrão
 DEFAULT_RECORDING_PATH = TEMP_DIR / "recording_dual.wav"
@@ -71,9 +75,12 @@ def get_user_settings() -> dict:
     import json
     defaults = {
         "mic_device_id": None,
+        "mic_device_name": None,
         "loopback_device_id": None,
+        "loopback_device_name": None,
         "model_profile": "auto",  # 'auto', 'large-v3-turbo', 'small', 'base'
         "corporate_glossary": DEFAULT_CORPORATE_GLOSSARY,
+        "user_speaker_name": "Você",
     }
     if not USER_CONFIG_PATH.exists():
         return defaults

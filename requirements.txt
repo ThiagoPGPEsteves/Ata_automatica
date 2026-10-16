@@ -1,7 +1,8 @@
-# Captura de Áudio em Tempo Real no Windows
+# Captura e Processamento de Áudio em Tempo Real no Windows
 pyaudiowpatch>=0.2.12.9
 soundcard>=0.4.6
 numpy>=1.24.0
+soxr>=1.1.0
 
 # Monitoramento de Memória e Sistema
 psutil>=5.9.0

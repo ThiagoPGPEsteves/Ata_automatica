@@ -75,7 +75,9 @@ class AtaApplicationController:
         self.current_worker: Optional[PipelineWorker] = None
         saved_prefs = get_user_settings()
         self.selected_mic_id: Optional[int] = saved_prefs.get("mic_device_id")
+        self.selected_mic_name: Optional[str] = saved_prefs.get("mic_device_name")
         self.selected_loopback_id: Optional[int] = saved_prefs.get("loopback_device_id")
+        self.selected_loopback_name: Optional[str] = saved_prefs.get("loopback_device_name")
 
         # 2. Componentes da Interface Gráfica
         self.floating_widget = FloatingWidget(recorder=self.recorder)
@@ -133,9 +135,18 @@ class AtaApplicationController:
         )
 
         def on_devices_saved(mic_id, loop_id):
+            prefs = get_user_settings()
             self.selected_mic_id = mic_id
+            self.selected_mic_name = prefs.get("mic_device_name")
             self.selected_loopback_id = loop_id
-            logger.info("Dispositivos de áudio selecionados pelo usuário: Mic=%d, Loopback=%d", mic_id, loop_id)
+            self.selected_loopback_name = prefs.get("loopback_device_name")
+            logger.info(
+                "Dispositivos de áudio selecionados pelo usuário: Mic='%s' (ID %s), Loopback='%s' (ID %s)",
+                self.selected_mic_name,
+                mic_id,
+                self.selected_loopback_name,
+                loop_id,
+            )
 
         dialog.devices_selected.connect(on_devices_saved)
         dialog.exec()
@@ -144,13 +155,17 @@ class AtaApplicationController:
         """Inicia a captura de áudio nos canais de Microfone e Teams com os dispositivos configurados."""
         try:
             logger.info(
-                "Iniciando gravação de áudio (Mic=%s, Loopback=%s)...",
+                "Iniciando gravação de áudio (Mic='%s' [ID %s], Loopback='%s' [ID %s])...",
+                self.selected_mic_name,
                 self.selected_mic_id,
+                self.selected_loopback_name,
                 self.selected_loopback_id,
             )
             self.recorder.start(
                 mic_device_id=self.selected_mic_id,
                 loopback_device_id=self.selected_loopback_id,
+                mic_device_name=self.selected_mic_name,
+                loopback_device_name=self.selected_loopback_name,
             )
             self.floating_widget.set_state(RecorderState.RECORDING)
             self.tray_icon.update_state(RecorderState.RECORDING)

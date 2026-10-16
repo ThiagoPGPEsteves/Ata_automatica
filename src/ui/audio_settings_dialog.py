@@ -220,13 +220,15 @@ class AudioSettingsDialog(QDialog):
         layout.addLayout(btn_layout)
 
     def _load_devices(self):
-        """Carrega e preenche os combos com os dispositivos disponíveis."""
+        """Carrega e preenche os combos com os dispositivos disponíveis, priorizando match por nome."""
         self.input_devices = list_available_inputs()
         self.loopback_devices = list_available_outputs_loopback()
         defaults = get_default_devices()
 
         default_mic = defaults.get("mic")
         default_loop = defaults.get("loopback")
+        saved_mic_name = self.saved_settings.get("mic_device_name")
+        saved_loop_name = self.saved_settings.get("loopback_device_name")
 
         # Preenche Microfones
         self.combo_mic.clear()
@@ -234,9 +236,11 @@ class AudioSettingsDialog(QDialog):
         for i, dev in enumerate(self.input_devices):
             display_name = f"{dev.name} (ID: {dev.id})"
             self.combo_mic.addItem(display_name, dev.id)
-            if self.current_mic_id is not None and dev.id == self.current_mic_id:
+            if saved_mic_name and dev.name.strip().lower() == saved_mic_name.strip().lower():
                 selected_mic_idx = i
-            elif self.current_mic_id is None and default_mic and dev.id == default_mic.id:
+            elif not saved_mic_name and self.current_mic_id is not None and dev.id == self.current_mic_id:
+                selected_mic_idx = i
+            elif not saved_mic_name and self.current_mic_id is None and default_mic and dev.id == default_mic.id:
                 selected_mic_idx = i
 
         if self.combo_mic.count() > 0:
@@ -248,9 +252,11 @@ class AudioSettingsDialog(QDialog):
         for i, dev in enumerate(self.loopback_devices):
             display_name = f"{dev.name} (ID: {dev.id})"
             self.combo_loopback.addItem(display_name, dev.id)
-            if self.current_loopback_id is not None and dev.id == self.current_loopback_id:
+            if saved_loop_name and dev.name.strip().lower() == saved_loop_name.strip().lower():
                 selected_loop_idx = i
-            elif self.current_loopback_id is None and default_loop and dev.id == default_loop.id:
+            elif not saved_loop_name and self.current_loopback_id is not None and dev.id == self.current_loopback_id:
+                selected_loop_idx = i
+            elif not saved_loop_name and self.current_loopback_id is None and default_loop and dev.id == default_loop.id:
                 selected_loop_idx = i
 
         if self.combo_loopback.count() > 0:
@@ -268,7 +274,7 @@ class AudioSettingsDialog(QDialog):
         self.txt_glossary.setPlainText(glossary_text)
 
     def _on_save_clicked(self):
-        """Salva as escolhas do usuário no arquivo config_user.json e emite o sinal."""
+        """Salva as escolhas do usuário no arquivo config_user.json (ID e nome) e emite o sinal."""
         mic_id = self.combo_mic.currentData()
         loop_id = self.combo_loopback.currentData()
         model_profile = self.combo_model.currentData() or "auto"
@@ -279,10 +285,24 @@ class AudioSettingsDialog(QDialog):
         if loop_id is not None:
             self.current_loopback_id = int(loop_id)
 
+        mic_name = None
+        for dev in self.input_devices:
+            if dev.id == self.current_mic_id:
+                mic_name = dev.name
+                break
+
+        loop_name = None
+        for dev in self.loopback_devices:
+            if dev.id == self.current_loopback_id:
+                loop_name = dev.name
+                break
+
         # Salva persistentemente
         save_user_settings({
             "mic_device_id": self.current_mic_id,
+            "mic_device_name": mic_name,
             "loopback_device_id": self.current_loopback_id,
+            "loopback_device_name": loop_name,
             "model_profile": model_profile,
             "corporate_glossary": glossary_text,
         })

@@ -4,6 +4,7 @@ Executa o pipeline completo (Gravação -> Whisper -> Ollama -> Parser) em segun
 garantindo que a interface gráfica (PyQt6) nunca congele ou apresente lentidão.
 """
 
+import wave
 import time
 import logging
 from pathlib import Path
@@ -111,12 +112,43 @@ class PipelineWorker(QThread):
             if not transcript_text.strip():
                 transcript_text = "[00:00:00] [Você]: Reunião iniciada sem detecção de voz nos canais de áudio."
 
+            # Persiste a transcrição completa em disco imediatamente para evitar perda de dados
+            try:
+                DEFAULT_TRANSCRIPT_PATH.parent.mkdir(parents=True, exist_ok=True)
+                DEFAULT_TRANSCRIPT_PATH.write_text(transcript_text, encoding="utf-8")
+                logger.info("Transcrição salva com sucesso em '%s'.", DEFAULT_TRANSCRIPT_PATH)
+            except Exception as e:
+                logger.warning("Falha ao salvar transcrição em disco: %s", e)
+
             if self._is_cancelled:
                 return
 
+            # Extrai metadados reais da gravação (data e duração do WAV)
+            meeting_date_str = time.strftime('%d/%m/%Y')
+            meeting_duration_str = None
+            try:
+                audio_file = Path(self.audio_path)
+                if audio_file.exists():
+                    mtime = audio_file.stat().st_mtime
+                    meeting_date_str = time.strftime('%d/%m/%Y %H:%M', time.localtime(mtime))
+                    with wave.open(str(audio_file), 'rb') as wf:
+                        frames = wf.getnframes()
+                        rate = wf.getframerate()
+                        if rate > 0:
+                            dur_sec = int(frames / rate)
+                            m, s = divmod(dur_sec, 60)
+                            h, m = divmod(m, 60)
+                            meeting_duration_str = f"{h:02d}:{m:02d}:{s:02d}" if h > 0 else f"{m:02d}:{s:02d}"
+            except Exception as e:
+                logger.debug("Não foi possível extrair metadados do arquivo de áudio: %s", e)
+
             # 3. Fase de Geração da Ata Executiva (Ollama com keep_alive: 0s)
             self.progress_changed.emit("Conectando ao Ollama (Llama 3.2 3B)...", 70)
-            system_prompt, user_prompt = generate_meeting_minutes_prompt(transcript_text)
+            system_prompt, user_prompt = generate_meeting_minutes_prompt(
+                transcript_text,
+                meeting_date=meeting_date_str,
+                meeting_duration=meeting_duration_str,
+            )
 
             client = OllamaClient()
 
@@ -130,7 +162,8 @@ class PipelineWorker(QThread):
                 raw_minutes_markdown = f"""# ATA DE REUNIÃO: Reunião Microsoft Teams
 
 ## 1. Informações Gerais
-- Data: {time.strftime('%d/%m/%Y')}
+- Data: {meeting_date_str}
+- Duração: {meeting_duration_str or 'Não especificada'}
 - Plataforma: Microsoft Teams (Gravação Local)
 - Participantes: Identificados por canal na transcrição
 

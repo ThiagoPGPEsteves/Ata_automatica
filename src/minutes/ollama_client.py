@@ -9,7 +9,7 @@ import logging
 from typing import Optional, List, Dict, Any, Callable
 import requests
 
-from src.config import OLLAMA_URL, OLLAMA_MODEL, OLLAMA_KEEP_ALIVE, OLLAMA_TIMEOUT
+from src.config import OLLAMA_URL, OLLAMA_MODEL, OLLAMA_KEEP_ALIVE, OLLAMA_TIMEOUT, OLLAMA_NUM_CTX
 
 logger = logging.getLogger(__name__)
 
@@ -37,11 +37,13 @@ class OllamaClient:
         default_model: str = OLLAMA_MODEL,
         keep_alive: str = OLLAMA_KEEP_ALIVE,
         timeout: float = OLLAMA_TIMEOUT,
+        num_ctx: int = OLLAMA_NUM_CTX,
     ):
         self.base_url = base_url.rstrip("/")
         self.default_model = default_model
         self.keep_alive = keep_alive
         self.timeout = timeout
+        self.num_ctx = num_ctx
 
     def is_available(self) -> bool:
         """Verifica se o daemon do Ollama está rodando e respondendo em localhost."""
@@ -72,6 +74,8 @@ class OllamaClient:
         system: Optional[str] = None,
         model: Optional[str] = None,
         keep_alive: Optional[str] = None,
+        num_ctx: Optional[int] = None,
+        options: Optional[Dict[str, Any]] = None,
         stream_callback: Optional[Callable[[str], None]] = None,
         on_chunk_callback: Optional[Callable[[str], None]] = None,
     ) -> str:
@@ -83,26 +87,53 @@ class OllamaClient:
         callback = stream_callback or on_chunk_callback
         selected_model = model or self.default_model
         active_keep_alive = keep_alive if keep_alive is not None else self.keep_alive
+        active_num_ctx = num_ctx if num_ctx is not None else self.num_ctx
+
+        gen_options: Dict[str, Any] = {
+            "num_ctx": active_num_ctx,
+            "temperature": 0.2,
+        }
+        if options:
+            gen_options.update(options)
 
         payload: Dict[str, Any] = {
             "model": selected_model,
             "prompt": prompt,
             "stream": callback is not None,
             "keep_alive": active_keep_alive,  # <-- OBRIGATÓRIO: '0s' libera a memória imediatamente
+            "options": gen_options,
         }
         if system:
             payload["system"] = system
 
+        def _check_truncation(meta: dict):
+            prompt_eval = meta.get("prompt_eval_count")
+            if prompt_eval is not None:
+                logger.info(
+                    "Ollama tokens do prompt avaliados: %d / num_ctx: %d",
+                    prompt_eval,
+                    active_num_ctx,
+                )
+                if prompt_eval >= active_num_ctx:
+                    logger.warning(
+                        "ALERTA DE TRUNCAMENTO: prompt_eval_count (%d) atingiu o limite de contexto num_ctx (%d). "
+                        "Partes da transcrição podem ter sido descartadas pelo modelo Ollama.",
+                        prompt_eval,
+                        active_num_ctx,
+                    )
+
         logger.info(
-            "Chamando Ollama ('%s', keep_alive='%s')...",
+            "Chamando Ollama ('%s', keep_alive='%s', num_ctx=%d)...",
             selected_model,
             active_keep_alive,
+            active_num_ctx,
         )
 
         try:
             if callback:
                 # Modo streaming: emite tokens à medida que chegam
                 full_text = []
+                last_chunk: Dict[str, Any] = {}
                 with requests.post(
                     f"{self.base_url}/api/generate",
                     json=payload,
@@ -123,8 +154,10 @@ class OllamaClient:
                             full_text.append(token)
                             callback(token)
                             if chunk.get("done", False):
+                                last_chunk = chunk
                                 break
 
+                _check_truncation(last_chunk)
                 output = "".join(full_text)
             else:
                 # Modo síncrono direto
@@ -140,6 +173,7 @@ class OllamaClient:
                     )
                 response.raise_for_status()
                 data = response.json()
+                _check_truncation(data)
                 output = data.get("response", "")
 
             logger.info(

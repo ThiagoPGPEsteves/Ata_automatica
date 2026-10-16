@@ -32,7 +32,8 @@ def resample_to_target(
 ) -> np.ndarray:
     """
     Reamostra array 1D (mono) para a taxa alvo (16.000 Hz).
-    Otimizado para decimação inteira ultra-rápida (ex: 48k/16k = 3).
+    Utiliza soxr com filtro anti-aliasing sinc de alta qualidade (HQ) para evitar
+    dobramento espectral (aliasing), com fallback para interpolação se indisponível.
     """
     if len(audio) == 0:
         return np.zeros(0, dtype=np.int16)
@@ -40,17 +41,19 @@ def resample_to_target(
     if orig_sr == target_sr:
         return audio
 
-    if orig_sr % target_sr == 0:
-        step = orig_sr // target_sr
-        return audio[::step]
-
-    num_samples = int(round(len(audio) * target_sr / orig_sr))
-    if num_samples <= 0:
-        return np.zeros(0, dtype=np.int16)
-
-    orig_indices = np.linspace(0, len(audio) - 1, num_samples)
-    resampled = np.interp(orig_indices, np.arange(len(audio)), audio)
-    return resampled.astype(np.int16)
+    try:
+        import soxr
+        resampled = soxr.resample(audio, orig_sr, target_sr, quality="HQ")
+        if resampled.dtype != np.int16:
+            resampled = np.clip(resampled, -32768, 32767).astype(np.int16)
+        return resampled
+    except Exception:
+        num_samples = int(round(len(audio) * target_sr / orig_sr))
+        if num_samples <= 0:
+            return np.zeros(0, dtype=np.int16)
+        orig_indices = np.linspace(0, len(audio) - 1, num_samples)
+        resampled = np.interp(orig_indices, np.arange(len(audio)), audio)
+        return resampled.astype(np.int16)
 
 
 def to_mono_int16(raw_bytes: bytes, channels: int) -> np.ndarray:
@@ -110,6 +113,10 @@ class DualAudioRecorder:
         self._mic_level: float = 0.0
         self._loopback_level: float = 0.0
 
+        # Contadores de diagnóstico de overflow de fila
+        self._dropped_mic_chunks: int = 0
+        self._dropped_loop_chunks: int = 0
+
     @property
     def is_recording(self) -> bool:
         return self._is_recording
@@ -134,6 +141,8 @@ class DualAudioRecorder:
         self,
         mic_device_id: Optional[int] = None,
         loopback_device_id: Optional[int] = None,
+        mic_device_name: Optional[str] = None,
+        loopback_device_name: Optional[str] = None,
     ):
         """Inicia a gravação dual e os fluxos assíncronos com suporte a dispositivos específicos."""
         if self._is_recording:
@@ -146,20 +155,31 @@ class DualAudioRecorder:
         self._start_time = time.time()
         self._pause_duration = 0.0
 
-        # Limpa filas
+        # Limpa filas e reseta contadores de diagnóstico
         while not self._mic_queue.empty():
             self._mic_queue.get_nowait()
         while not self._loop_queue.empty():
             self._loop_queue.get_nowait()
+        self._dropped_mic_chunks = 0
+        self._dropped_loop_chunks = 0
 
-        from src.audio.devices import get_device_by_index, get_default_devices
+        from src.audio.devices import get_device_by_index, get_device_by_name, get_default_devices
 
+        # 1. Tenta resolver por nome (mais resiliente a reconexões USB/P3 e shifts de index)
         mic_dev = None
-        if mic_device_id is not None:
+        if mic_device_name:
+            mic_dev = get_device_by_name(mic_device_name, is_loopback=False)
+            if not mic_dev:
+                logger.warning("Microfone '%s' não encontrado pelo nome. Tentando índice...", mic_device_name)
+        if not mic_dev and mic_device_id is not None:
             mic_dev = get_device_by_index(mic_device_id)
 
         loopback_dev = None
-        if loopback_device_id is not None:
+        if loopback_device_name:
+            loopback_dev = get_device_by_name(loopback_device_name, is_loopback=True)
+            if not loopback_dev:
+                logger.warning("Dispositivo loopback '%s' não encontrado pelo nome. Tentando índice...", loopback_device_name)
+        if not loopback_dev and loopback_device_id is not None:
             loopback_dev = get_device_by_index(loopback_device_id)
 
         # Fallback para os padrões caso não especificados ou inválidos
@@ -167,8 +187,10 @@ class DualAudioRecorder:
             defaults = get_default_devices()
             if not mic_dev:
                 mic_dev = defaults.get("mic")
+                logger.warning("Usando microfone padrão: %s", mic_dev.name if mic_dev else "Nenhum")
             if not loopback_dev:
                 loopback_dev = defaults.get("loopback")
+                logger.warning("Usando dispositivo loopback padrão: %s", loopback_dev.name if loopback_dev else "Nenhum")
 
         logger.info("Dispositivo Mic Selecionado: %s", mic_dev)
         logger.info("Dispositivo Loopback Selecionado: %s", loopback_dev)
@@ -190,7 +212,12 @@ class DualAudioRecorder:
                     try:
                         self._mic_queue.put_nowait(resampled)
                     except queue.Full:
-                        pass
+                        self._dropped_mic_chunks += 1
+                        if self._dropped_mic_chunks % 50 == 1:
+                            logger.warning(
+                                "Fila do Microfone cheia! Chunks descartados até agora: %d",
+                                self._dropped_mic_chunks,
+                            )
                 return (None, pyaudio.paContinue)
 
             try:
@@ -221,7 +248,12 @@ class DualAudioRecorder:
                     try:
                         self._loop_queue.put_nowait(resampled)
                     except queue.Full:
-                        pass
+                        self._dropped_loop_chunks += 1
+                        if self._dropped_loop_chunks % 50 == 1:
+                            logger.warning(
+                                "Fila do Loopback Teams cheia! Chunks descartados até agora: %d",
+                                self._dropped_loop_chunks,
+                            )
                 return (None, pyaudio.paContinue)
 
             try:
@@ -294,20 +326,34 @@ class DualAudioRecorder:
             self._pyaudio_instance = None
 
         if self._writer_thread and self._writer_thread.is_alive():
-            self._writer_thread.join(timeout=2.0)
+            self._writer_thread.join(timeout=5.0)
 
         saved_path = self.writer.close()
         self._mic_level = 0.0
         self._loopback_level = 0.0
+
+        if self._dropped_mic_chunks > 0 or self._dropped_loop_chunks > 0:
+            logger.warning(
+                "Aviso de Gravação: Ocorreram descartes por buffer cheio (Mic: %d chunks, Teams: %d chunks).",
+                self._dropped_mic_chunks,
+                self._dropped_loop_chunks,
+            )
+
         logger.info("Gravação finalizada. Arquivo salvo em: %s", saved_path)
         return saved_path
 
     def _writer_loop(self):
-        """Consome dados das filas e escreve periodicamente no arquivo em disco."""
+        """
+        Consome dados das filas e escreve periodicamente no arquivo em disco.
+        Utiliza sincronização por relógio de amostras real (wall-clock) para evitar drift
+        cumulativo entre o microfone e o loopback quando um dos canais fica em silêncio.
+        """
         chunk_target_len = int(self.sample_rate * 0.1)  # 1600 amostras (0.1s a 16kHz)
+        silence_lag_tolerance = int(self.sample_rate * 0.25)  # 4000 amostras (0.25s)
 
         mic_buf = np.zeros(0, dtype=np.int16)
         loop_buf = np.zeros(0, dtype=np.int16)
+        total_samples_written = 0
 
         while self._is_recording or not self._mic_queue.empty() or not self._loop_queue.empty():
             # Drena buffers disponíveis da fila de microfone
@@ -326,24 +372,35 @@ class DualAudioRecorder:
                 except queue.Empty:
                     break
 
-            # Se um dos canais estiver em silêncio no Windows WASAPI (ex: ninguém falando no Teams),
-            # preenche o canal silencioso com zeros para manter a sincronia temporal exata
-            max_len = max(len(mic_buf), len(loop_buf))
+            # Sincronização temporal baseada em relógio de parede:
+            # Se um dos canais parar de entregar pacotes (ex: WASAPI Loopback quando nada toca no Teams),
+            # preenche apenas o atraso em relação ao relógio decorrido para evitar drift cumulativo.
+            if self._is_recording and not self._is_paused:
+                elapsed_sec = self.get_elapsed_seconds()
+                expected_samples = int(elapsed_sec * self.sample_rate)
 
-            if max_len >= chunk_target_len:
-                # Alinha os dois buffers para max_len usando zeros se necessário
-                if len(mic_buf) < max_len:
-                    mic_buf = np.pad(mic_buf, (0, max_len - len(mic_buf)))
-                if len(loop_buf) < max_len:
-                    loop_buf = np.pad(loop_buf, (0, max_len - len(loop_buf)))
+                # Preenche silêncio apenas se o canal estiver atrasado além da tolerância
+                mic_lag = expected_samples - (total_samples_written + len(mic_buf))
+                if mic_lag > silence_lag_tolerance:
+                    silence_to_add = np.zeros(mic_lag, dtype=np.int16)
+                    mic_buf = np.concatenate([mic_buf, silence_to_add]) if len(mic_buf) > 0 else silence_to_add
 
-                write_len = (max_len // chunk_target_len) * chunk_target_len
+                loop_lag = expected_samples - (total_samples_written + len(loop_buf))
+                if loop_lag > silence_lag_tolerance:
+                    silence_to_add = np.zeros(loop_lag, dtype=np.int16)
+                    loop_buf = np.concatenate([loop_buf, silence_to_add]) if len(loop_buf) > 0 else silence_to_add
+
+            # Escreve o mínimo disponível em múltiplos de chunk_target_len
+            min_len = min(len(mic_buf), len(loop_buf))
+            if min_len >= chunk_target_len:
+                write_len = (min_len // chunk_target_len) * chunk_target_len
 
                 sub_mic = mic_buf[:write_len]
                 sub_loop = loop_buf[:write_len]
 
                 mic_buf = mic_buf[write_len:]
                 loop_buf = loop_buf[write_len:]
+                total_samples_written += write_len
 
                 # Calcula RMS para o VU meter
                 self._mic_level = float(np.sqrt(np.mean(sub_mic.astype(np.float32) ** 2)) / 32768.0)
@@ -357,4 +414,18 @@ class DualAudioRecorder:
                 # Gravação em disco com Zero-RAM!
                 self.writer.write_chunk(stereo.tobytes())
             else:
-                time.sleep(0.05)
+                time.sleep(0.04)
+
+        # Flush final após o término da gravação:
+        # Se restaram amostras acumuladas em apenas um canal, alinha com silêncio e escreve
+        final_len = max(len(mic_buf), len(loop_buf))
+        if final_len > 0:
+            if len(mic_buf) < final_len:
+                mic_buf = np.pad(mic_buf, (0, final_len - len(mic_buf)))
+            if len(loop_buf) < final_len:
+                loop_buf = np.pad(loop_buf, (0, final_len - len(loop_buf)))
+
+            stereo = np.empty((final_len, 2), dtype=np.int16)
+            stereo[:, 0] = mic_buf
+            stereo[:, 1] = loop_buf
+            self.writer.write_chunk(stereo.tobytes())

@@ -46,10 +46,17 @@ class MinutesParser:
     def parse(cls, markdown_text: str) -> MeetingMinutes:
         minutes = MeetingMinutes(raw_markdown=markdown_text)
 
-        # 1. Extração do Título
-        title_match = re.search(r"^#\s+(?:ATA DE REUNIÃO[:\s-]*)?(.+)$", markdown_text, re.MULTILINE | re.IGNORECASE)
-        if title_match:
-            minutes.title = title_match.group(1).strip()
+        # 1. Extração do Título (linha única que começa com # e não ##, sem engolir quebra de linha)
+        title_matches = re.finditer(r"^#[ \t]+([^\r\n]+)$", markdown_text, re.MULTILINE)
+        for tm in title_matches:
+            raw_title = tm.group(1).strip()
+            # Remove prefixos redundantes como "Ata de Reunião: " ou "Ata de Reunião - "
+            cleaned = re.sub(r"^ATA DE REUNI[ÃA]O[ \t]*[:\-–][ \t]*", "", raw_title, flags=re.IGNORECASE).strip()
+            if cleaned and not re.match(r"^ATA DE REUNI[ÃA]O$", cleaned, re.IGNORECASE):
+                minutes.title = cleaned
+                break
+            elif cleaned and re.match(r"^ATA DE REUNI[ÃA]O$", cleaned, re.IGNORECASE):
+                minutes.title = "Ata de Reunião"
 
         # Divide o texto em seções baseadas nos cabeçalhos H2 (## )
         sections = re.split(r"\n##\s+", "\n" + markdown_text)

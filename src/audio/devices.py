@@ -176,6 +176,27 @@ def get_device_by_index(index: int) -> Optional[AudioDeviceInfo]:
     return None
 
 
+def get_device_by_name(name: str, is_loopback: bool = False) -> Optional[AudioDeviceInfo]:
+    """Busca um dispositivo ativo pelo nome, tolerante a variações e shifts de índice."""
+    if not name:
+        return None
+    candidates = list_available_outputs_loopback() if is_loopback else list_available_inputs()
+    name_clean = name.strip().lower()
+
+    # 1. Correspondência exata
+    for dev in candidates:
+        if dev.name.strip().lower() == name_clean:
+            return dev
+
+    # 2. Correspondência por contenção de nome
+    for dev in candidates:
+        d_name = dev.name.strip().lower()
+        if name_clean in d_name or d_name in name_clean:
+            return dev
+
+    return None
+
+
 def get_default_devices() -> Dict[str, Optional[AudioDeviceInfo]]:
     """
     Retorna os melhores dispositivos padrão para gravação da reunião:

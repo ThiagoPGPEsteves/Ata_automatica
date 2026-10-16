@@ -14,6 +14,7 @@ __pycache__/
 .env.*
 secrets.json
 credentials.json
+config_user.json
 
 # Arquivos de Áudio / Vídeo / Saídas de reuniões (temporários ou locais)
 *.mp3
@@ -25,6 +26,9 @@ transcripts/
 output/
 downloads/
 temp/
+sessions/
+logs/
+.pytest_cache/
 
 # Arquivos Markdown (ignorar todos os .md exceto README)
 *.md

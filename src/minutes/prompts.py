@@ -14,8 +14,9 @@ Diretrizes obrigatórias:
 1. FIDELIDADE E PRECISÃO: Baseie-se estritamente no conteúdo que foi discutido. Não invente decisões, prazos ou tarefas não mencionadas.
 2. DISTINÇÃO DE INTERLOCUTORES: A transcrição identifica "[Você]" e "[Participantes da Reunião]". Use essas referências e nomes citados para atribuir responsabilidades corretamente.
 3. CONCISÃO EXECUTIVA: Seja direto, claro e profissional. Evite termos coloquiais ou repetições.
-4. ESTRUTURA PADRÃO: Sua resposta DEVE conter obrigatoriamente as seguintes seções em Markdown:
-   # ATA DE REUNIÃO: [TÍTULO DA REUNIÃO]
+4. TÍTULO REPRESENTATIVO: No cabeçalho H1, defina um título claro e específico baseado no assunto principal da reunião (ex: "# ATA DE REUNIÃO: Revisão de Exposição Colômbia e CCPs"). Evite títulos genéricos como "Alinhamento Geral" ou "Reunião de Alinhamento".
+5. ESTRUTURA PADRÃO: Sua resposta DEVE conter obrigatoriamente as seguintes seções em Markdown:
+   # ATA DE REUNIÃO: [TÍTULO ESPECÍFICO DA PAUTA]
    ## 1. Informações Gerais
    ## 2. Resumo Executivo
    ## 3. Pautas Discutidas
@@ -29,17 +30,25 @@ def generate_meeting_minutes_prompt(
     transcript_text: str,
     meeting_title: Optional[str] = None,
     meeting_date: Optional[str] = None,
+    meeting_duration: Optional[str] = None,
 ) -> Tuple[str, str]:
     """
     Gera o par (system_prompt, user_prompt) para envio ao Ollama.
     """
-    title = meeting_title or "Reunião de Alinhamento e Deliberações"
     date_str = meeting_date or "Data da gravação"
+    meta_lines = [f"Data de Referência: {date_str}"]
+    if meeting_duration:
+        meta_lines.append(f"Duração da Reunião: {meeting_duration}")
+    if meeting_title:
+        meta_lines.append(f"Título Sugerido: {meeting_title}")
+    else:
+        meta_lines.append("Título: Identifique e defina um título específico com base no tema principal da discussão.")
+
+    context_header = "\n".join(meta_lines)
 
     user_prompt = f"""Por favor, elabore a ata de reunião executiva com base nas informações e transcrição abaixo:
 
-Título Sugerido: {title}
-Data de Referência: {date_str}
+{context_header}
 
 ---
 TRANSCRIÇÃO COMPLETA DA REUNIÃO:

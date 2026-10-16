@@ -26,10 +26,12 @@ from src.config import (
     WHISPER_REPETITION_PENALTY,
     WHISPER_NO_REPEAT_NGRAM_SIZE,
     WHISPER_BEAM_SIZE,
+    AUDIO_DSP_ENABLED,
     AUDIO_HIGHPASS_CUTOFF_HZ,
     AUDIO_PEAK_NORMALIZE,
     MIN_FREE_RAM_FOR_TURBO_MODEL_MB,
     MIN_FREE_RAM_FOR_SMALL_MODEL_MB,
+    WHISPER_STYLE_PROMPT,
     DEFAULT_CORPORATE_GLOSSARY,
 )
 
@@ -85,19 +87,8 @@ def select_optimal_model_size(preferred_model: Optional[str] = None) -> str:
     return selected
 
 
-def preprocess_audio_dsp(
-    audio_input: Union[str, Path, np.ndarray],
-    sample_rate: int = 16000,
-    cutoff_hz: float = AUDIO_HIGHPASS_CUTOFF_HZ,
-    target_peak: float = AUDIO_PEAK_NORMALIZE,
-) -> np.ndarray:
-    """
-    Condicionamento de sinal de áudio em tempo real com NumPy:
-    1. Converte/normaliza o sinal para float32 (-1.0 a 1.0).
-    2. Aplica Filtro Passa-Alta FIR (65 taps) a 80 Hz para eliminar hum elétrico (60 Hz),
-       ruídos de retorno elétrico do conector P3 de 3.5mm e vibrações mecânicas.
-    3. Normaliza o pico da amplitude sem ceifamento (clipping) para máxima clareza no Whisper.
-    """
+def to_float32_mono(audio_input: Union[str, Path, np.ndarray]) -> np.ndarray:
+    """Converte e normaliza o áudio de entrada para um array NumPy 1D mono float32 (-1.0 a 1.0)."""
     import wave
 
     if isinstance(audio_input, (str, Path)):
@@ -123,6 +114,23 @@ def preprocess_audio_dsp(
             audio = audio_input.copy()
     else:
         raise ValueError(f"Formato de áudio não suportado: {type(audio_input)}")
+
+    return audio
+
+
+def preprocess_audio_dsp(
+    audio_input: Union[str, Path, np.ndarray],
+    sample_rate: int = 16000,
+    cutoff_hz: float = AUDIO_HIGHPASS_CUTOFF_HZ,
+    target_peak: float = AUDIO_PEAK_NORMALIZE,
+) -> np.ndarray:
+    """
+    Condicionamento de sinal de áudio em tempo real com NumPy:
+    1. Converte/normaliza o sinal para float32 (-1.0 a 1.0).
+    2. Aplica Filtro Passa-Alta FIR (65 taps) a 80 Hz para eliminar hum elétrico (60 Hz) e ruídos sub-graves.
+    3. Normaliza o pico da amplitude sem ceifamento (clipping) para máxima clareza no Whisper.
+    """
+    audio = to_float32_mono(audio_input)
 
     if len(audio) < 100:
         return audio
@@ -216,19 +224,23 @@ class WhisperEngine:
         beam_size: int = WHISPER_BEAM_SIZE,
         vad_filter: bool = True,
         initial_prompt: Optional[str] = None,
+        hotwords: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """
         Transcreve o áudio (arquivo no disco ou array numpy mono 16kHz float32/int16).
-        Aplica filtro DSP (passa-alta e normalização) e parâmetros anti-alucinação.
+        Utiliza hotwords para reaplicação contínua de termos técnicos em cada janela de 30s.
         Retorna uma lista de dicionários contendo start, end e text.
         """
         if not self._is_loaded:
             self.load()
 
-        logger.info("Aplicando condicionamento DSP de áudio e iniciando transcrição...")
-        processed_audio = preprocess_audio_dsp(audio_input)
+        if AUDIO_DSP_ENABLED:
+            logger.info("Aplicando condicionamento DSP de áudio...")
+            processed_audio = preprocess_audio_dsp(audio_input)
+        else:
+            processed_audio = to_float32_mono(audio_input)
 
-        effective_prompt = initial_prompt or DEFAULT_CORPORATE_GLOSSARY
+        glossary_hotwords = hotwords or initial_prompt or DEFAULT_CORPORATE_GLOSSARY
 
         segments_generator, info = self._model.transcribe(
             processed_audio,
@@ -236,7 +248,8 @@ class WhisperEngine:
             beam_size=beam_size,
             vad_filter=vad_filter,
             vad_parameters=dict(min_silence_duration_ms=400),
-            initial_prompt=effective_prompt,
+            initial_prompt=WHISPER_STYLE_PROMPT,
+            hotwords=glossary_hotwords,
             condition_on_previous_text=WHISPER_CONDITION_ON_PREVIOUS_TEXT,
             repetition_penalty=WHISPER_REPETITION_PENALTY,
             no_repeat_ngram_size=WHISPER_NO_REPEAT_NGRAM_SIZE,
