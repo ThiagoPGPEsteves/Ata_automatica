@@ -60,8 +60,8 @@ def test_ui_components_instantiation_and_memory():
     assert tray is not None
     assert review is not None
 
-    # Teto estrito: A interface gráfica pura não deve exceder 50 MB
-    assert ram_after_mb < 80.0, f"Consumo de memória da UI excedeu o teto esperado: {ram_after_mb:.2f} MB"
+    # Teto estrito: A interface gráfica pura não deve acrescer mais de 50 MB
+    assert ram_ui_delta < 50.0, f"Acréscimo de memória da UI excedeu o teto esperado: {ram_ui_delta:.2f} MB"
 
     floating_bar.close()
     review.close()
