@@ -8,6 +8,7 @@ import json
 import logging
 from typing import Optional, List, Dict, Any, Callable, Union
 import requests
+import time
 
 from src.config import OLLAMA_URL, OLLAMA_MODEL, OLLAMA_KEEP_ALIVE, OLLAMA_TIMEOUT, OLLAMA_NUM_CTX
 
@@ -135,14 +136,17 @@ class OllamaClient:
 
         try:
             if callback:
-                # Modo streaming: emite tokens à medida que chegam
+                # Modo streaming: timeout de conexão (15s) e leitura por chunk (45s de inatividade)
+                chunk_read_timeout = 45.0
                 full_text = []
                 last_chunk: Dict[str, Any] = {}
+                start_stream_time = time.time()
+
                 with requests.post(
                     f"{self.base_url}/api/generate",
                     json=payload,
                     stream=True,
-                    timeout=self.timeout,
+                    timeout=(15.0, chunk_read_timeout),
                 ) as response:
                     if response.status_code == 404:
                         raise OllamaModelNotFoundError(
@@ -152,6 +156,10 @@ class OllamaClient:
                     response.raise_for_status()
 
                     for line in response.iter_lines():
+                        if time.time() - start_stream_time > self.timeout:
+                            raise TimeoutError(
+                                f"Tempo limite total ({self.timeout}s) excedido durante o streaming do Ollama."
+                            )
                         if line:
                             chunk = json.loads(line.decode("utf-8"))
                             token = chunk.get("response", "")

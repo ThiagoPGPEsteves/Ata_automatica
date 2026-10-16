@@ -124,7 +124,7 @@ MEETING_MINUTES_SCHEMA: Dict[str, Any] = {
 
 def partition_transcript(
     transcript_text: str,
-    max_chunk_chars: int = 5500,  # ~1.500-1.800 tokens
+    max_chunk_chars: int = 12000,  # ~3.000 tokens (permite single-pass direto em reuniões de até ~30 minutos)
 ) -> List[str]:
     """
     Divide a transcrição em blocos contíguos de diálogo sem partir falas ao meio.
@@ -231,7 +231,7 @@ class MinutesGenerator:
         """
         Gera a ata estruturada e retorna a tupla (MeetingMinutes, raw_markdown).
         """
-        chunks = partition_transcript(transcript_text, max_chunk_chars=6000)
+        chunks = partition_transcript(transcript_text, max_chunk_chars=10000)
 
         # Rota 1: Reuniões curtas ou médias (1 único bloco)
         if len(chunks) <= 1:
@@ -266,7 +266,7 @@ class MinutesGenerator:
         progress_callback: Optional[Callable[[str, int], None]],
         token_callback: Optional[Callable[[str], None]],
     ) -> Tuple[MeetingMinutes, str]:
-        """Geração em chamada direta estruturada via JSON Schema."""
+        """Geração em chamada direta estruturada via JSON Schema com proteção anti-loop."""
         if progress_callback:
             progress_callback("Gerando ata executiva estruturada via IA...", 75)
 
@@ -286,6 +286,12 @@ class MinutesGenerator:
                 keep_alive=OLLAMA_KEEP_ALIVE,
                 response_format=MEETING_MINUTES_SCHEMA,
                 stream_callback=token_callback,
+                options={
+                    "temperature": 0.2,
+                    "repeat_penalty": 1.15,
+                    "repeat_last_n": 64,
+                    "num_predict": 2048,
+                },
             )
 
             data = json.loads(raw_response)
@@ -346,6 +352,12 @@ class MinutesGenerator:
                     model=OLLAMA_MODEL,
                     keep_alive=OLLAMA_KEEP_ALIVE,
                     response_format=CHUNK_NOTES_SCHEMA,
+                    options={
+                        "temperature": 0.2,
+                        "repeat_penalty": 1.15,
+                        "repeat_last_n": 64,
+                        "num_predict": 1024,
+                    },
                 )
                 chunk_data = json.loads(raw_chunk)
                 chunk_notes_list.append(chunk_data)
@@ -379,6 +391,12 @@ class MinutesGenerator:
                 keep_alive=OLLAMA_KEEP_ALIVE,
                 response_format=MEETING_MINUTES_SCHEMA,
                 stream_callback=token_callback,
+                options={
+                    "temperature": 0.2,
+                    "repeat_penalty": 1.15,
+                    "repeat_last_n": 64,
+                    "num_predict": 2048,
+                },
             )
 
             final_data = json.loads(raw_final)
@@ -396,7 +414,7 @@ class MinutesGenerator:
         except Exception as e:
             logger.warning("Falha na consolidação Reduce (%s). Recorrendo a fallback consolidado.", e)
             return self._fallback_markdown_generate(
-                transcript_text=chunks[0],  # Fallback com primeiro bloco
+                transcript_text="\n\n".join(chunks),
                 meeting_title=meeting_title,
                 meeting_date=meeting_date,
                 meeting_duration=meeting_duration,

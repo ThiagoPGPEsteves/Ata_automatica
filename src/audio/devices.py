@@ -52,6 +52,30 @@ def list_pyaudio_devices() -> Dict[str, Any]:
             backend="pyaudiowpatch",
         )
 
+        # Se o microfone padrão for 'External Microphone' (jack P2/P3), mas houver um 'Microphone Array'
+        # integrado (ex: Intel SST), priorizamos o Microphone Array para evitar crosstalk elétrico com os fones
+        if "External Microphone" in mic_info.name:
+            for i in range(p.get_device_count()):
+                d_info = p.get_device_info_by_index(i)
+                if d_info.get("hostApi") == wasapi_info["index"] and d_info.get("maxInputChannels", 0) > 0:
+                    d_name = d_info.get("name", "")
+                    if "Microphone Array" in d_name:
+                        logger.info(
+                            "Priorizando '%s' sobre '%s' para eliminar crosstalk elétrico na tomada de fone.",
+                            d_name,
+                            mic_info.name,
+                        )
+                        mic_info = AudioDeviceInfo(
+                            id=d_info["index"],
+                            name=d_name,
+                            is_input=True,
+                            is_loopback=False,
+                            sample_rate=int(d_info.get("defaultSampleRate", 16000)),
+                            channels=int(d_info.get("maxInputChannels", 1)),
+                            backend="pyaudiowpatch",
+                        )
+                        break
+
     # Dispositivo padrão de saída para encontrar o par de loopback
     default_output_idx = wasapi_info.get("defaultOutputDevice")
     loopback_info = None
