@@ -20,6 +20,9 @@ from src.config import TEMP_DIR
 from src.audio.disk_writer import AudioDiskWriter
 from src.audio.devices import get_default_devices
 from src.audio.recorder import DualAudioRecorder
+import pytest
+
+pytestmark = pytest.mark.integration
 
 
 def test_audio_disk_writer():

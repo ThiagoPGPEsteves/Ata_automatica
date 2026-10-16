@@ -17,6 +17,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from src.config import OUTPUT_DIR
 from src.minutes.parser import MeetingMinutes, ActionItem, MinutesParser
 from src.exporter.docx_builder import DocxMeetingMinutesBuilder
+import pytest
+
+pytestmark = pytest.mark.unit
 
 
 def test_docx_generation_from_model():

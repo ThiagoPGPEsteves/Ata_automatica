@@ -125,27 +125,27 @@ class MinutesParser:
             content = "\n".join(lines[1:]).strip()
 
             # 2. Informações Gerais / Participantes
-            if any(k in header for k in ["informações", "dados", "participantes"]):
+            if any(k in header for k in ["informações", "informacoes", "dados", "participantes"]):
                 cls._parse_info_section(content, minutes)
 
             # 3. Resumo Executivo
-            elif any(k in header for k in ["resumo", "visão geral", "sumário"]):
+            elif any(k in header for k in ["resumo", "visão geral", "visao geral", "sumário", "sumario"]):
                 minutes.executive_summary = content
 
             # 4. Pautas e Discussões
-            elif any(k in header for k in ["pauta", "discussões", "tópicos"]):
+            elif any(k in header for k in ["pauta", "discussões", "discussoes", "tópicos", "topicos"]):
                 minutes.topics = cls._parse_topics(content)
 
             # 5. Decisões Tomadas
-            elif any(k in header for k in ["decisões", "deliberações", "consensos"]):
+            elif any(k in header for k in ["decisões", "decisoes", "decisão", "decisao", "deliberações", "deliberacoes", "consensos"]):
                 minutes.decisions = cls._parse_bullet_list(content)
 
             # 6. Plano de Ação (Tabela ou Lista)
-            elif any(k in header for k in ["ação", "plano de ação", "atividades", "tarefas"]):
+            elif any(k in header for k in ["ação", "ações", "acao", "acoes", "plano de ação", "plano de acao", "atividades", "tarefas"]):
                 minutes.action_items = cls._parse_action_items(content)
 
             # 7. Próximos Passos e Pendências
-            elif any(k in header for k in ["próximos passos", "pendências", "encaminhamentos"]):
+            elif any(k in header for k in ["próximos passos", "proximos passos", "pendências", "pendencias", "encaminhamentos"]):
                 minutes.next_steps = cls._parse_bullet_list(content)
 
         logger.info(

@@ -19,6 +19,8 @@ if str(ROOT_DIR) not in sys.path:
 
 from src.audio.echo_gate import EchoGate
 
+pytestmark = pytest.mark.unit
+
 
 def generate_speech_like_signal(duration_sec: float = 3.0, sample_rate: int = 16000) -> np.ndarray:
     """Gera um sinal pseudo-voz modulado em amplitude com harmonicos fundamentais (120 Hz, 240 Hz, 360 Hz)."""

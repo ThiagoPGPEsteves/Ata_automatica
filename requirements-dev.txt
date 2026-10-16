@@ -1,0 +1,5 @@
+# Dependências de Desenvolvimento e Engenharia de Qualidade (Fase P5)
+-r requirements.txt
+
+# Framework de Testes Automatizados
+pytest>=9.0.0

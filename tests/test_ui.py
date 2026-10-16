@@ -28,6 +28,9 @@ from src.ui.floating_widget import FloatingWidget, RecorderState, DualVUMeterWid
 from src.ui.tray_icon import AtaSystemTrayIcon, create_tray_icon
 from src.ui.review_dialog import ReviewDialog
 from src.ui.worker_threads import PipelineWorker
+import pytest
+
+pytestmark = pytest.mark.integration
 
 
 # Instância global compartilhada do QApplication para os testes

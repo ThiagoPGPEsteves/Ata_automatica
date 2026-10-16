@@ -22,6 +22,9 @@ from src.minutes.generator import (
     MEETING_MINUTES_SCHEMA,
 )
 from src.minutes.parser import MeetingMinutes, ActionItem
+import pytest
+
+pytestmark = pytest.mark.unit
 
 
 def test_partition_transcript_short():

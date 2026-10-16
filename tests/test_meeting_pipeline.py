@@ -16,6 +16,8 @@ from src.pipeline.meeting_pipeline import (
 )
 from src.minutes.parser import MeetingMinutes
 
+pytestmark = pytest.mark.unit
+
 
 def test_cancel_token():
     token = CancelToken()

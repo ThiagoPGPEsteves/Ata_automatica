@@ -9,6 +9,8 @@ import pytest
 
 from src.pipeline.session import MeetingSession, SessionStore
 
+pytestmark = pytest.mark.unit
+
 
 def test_session_paths_and_manifest(tmp_path):
     store = SessionStore(root_dir=tmp_path)

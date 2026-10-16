@@ -26,6 +26,8 @@ from src.utils.telemetry import (
 )
 from src.transcription.whisper_engine import WhisperEngine
 
+pytestmark = pytest.mark.unit
+
 
 def test_format_duration():
     assert format_duration(0) == "00:00"

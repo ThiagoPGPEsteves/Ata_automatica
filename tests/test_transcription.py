@@ -30,6 +30,9 @@ from src.transcription.post_process import (
     format_transcript_dialogue,
     process_dual_recording,
 )
+import pytest
+
+pytestmark = pytest.mark.integration
 
 
 def create_synthetic_dual_wav(filepath: Path, duration_sec: float = 3.0, sample_rate: int = 16000) -> Path:

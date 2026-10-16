@@ -178,6 +178,10 @@ python tools/diagnose_audio.py --file sessions/2026-10-16_114213/audio.wav
 # 5. Benchmark Científico de Desempenho e Recursos (Fase P4)
 python tools/benchmark_performance.py
 python tools/benchmark_performance.py --file sessions/2026-10-16_114213/audio.wav --models small
+
+# 6. Benchmark Científico de Precisão de Transcrição e WER (Fase P5)
+python tools/benchmark_transcription.py
+python tools/benchmark_transcription.py --duration 30 --show-diff
 ```
 
 ---
@@ -189,8 +193,11 @@ Ata_automatica/
 ├── run.py                   # Ponto de entrada oficial (GUI PyQt6 e CLI Headless)
 ├── tools/
 │   ├── diagnose_audio.py    # Ferramenta clínica de diagnóstico de eco e crosstalk (Fase P3)
-│   └── benchmark_performance.py # Benchmark de desempenho, RTF e auditoria de RAM (Fase P4)
-├── requirements.txt         # Dependências fixadas otimizadas
+│   ├── benchmark_performance.py # Benchmark de desempenho, RTF e auditoria de RAM (Fase P4)
+│   └── benchmark_transcription.py # Benchmark de precisão, WER, CER e hotwords (Fase P5)
+├── requirements.txt         # Dependências fixadas de produção
+├── requirements-dev.txt     # Dependências de desenvolvimento e testes (Fase P5)
+├── pytest.ini               # Configuração formal do Pytest com marcadores unit/integration
 ├── plano.md                 # Especificação técnica e matriz de execução detalhada
 ├── README.md                # Documentação oficial do projeto
 │
@@ -221,8 +228,9 @@ Ata_automatica/
 │   │   ├── styles.py        # Paleta Azul Marinho (#1F4E79), tipografia e XML shading
 │   │   └── docx_builder.py  # Construtor do documento .docx
 │   │
-│   ├── utils/               # Módulo de Utilitários e Telemetria (Fase P4)
-│   │   └── telemetry.py     # SystemMemoryAuditor (App+Ollama), RTFEstimator e VAD
+│   ├── utils/               # Módulo de Utilitários e Telemetria (Fase P4/P5)
+│   │   ├── telemetry.py     # SystemMemoryAuditor (App+Ollama), RTFEstimator e VAD
+│   │   └── text_metrics.py  # Cálculo nativo de Word Error Rate (WER), CER e Levenshtein
 │   │
 │   └── ui/                  # Módulo 5: Interface Desktop Nativa (PyQt6)
 │       ├── floating_widget.py # Barra flutuante Always-on-Top com cronômetro e VU meter
@@ -230,6 +238,10 @@ Ata_automatica/
 │       ├── review_dialog.py   # Janela executiva de revisão, edição e exportação
 │       └── worker_threads.py  # QThread fino adaptando MeetingPipeline para a UI
 │
+├── tests/                   # Bateria de testes automatizados (Fase P5)
+│   ├── fixtures/            # Áudios e transcrições de referência anotadas (Ground Truth)
+│   ├── conftest.py          # Fixtures reutilizáveis de áudio e mocks
+│   └── test_*.py            # Suíte completa com 53 testes categorizados
 ├── sessions/                # Histórico imutável de reuniões por data/hora (ignorado no git)
 ├── logs/                    # Logs rotativos da aplicação (app.log)
 ├── temp/                    # Arquivos temporários de áudio (ignorado no git)
@@ -240,10 +252,16 @@ Ata_automatica/
 
 ## 🧪 Bateria de Testes Automatizados
 
-O projeto utiliza **pytest** para validação contínua de ponta a ponta:
+O projeto utiliza **pytest** para validação contínua e engenharia de qualidade (Fase P5):
 
 ```powershell
-# Executar todos os 39 testes unitários e de integração
+# 1. Executar apenas os testes unitários rápidos (< 5 segundos, sem hardware nem rede)
+.venv\Scripts\pytest -m unit -v
+
+# 2. Executar os testes de integração
+.venv\Scripts\pytest -m integration -v
+
+# 3. Executar toda a suíte de 53 testes automatizados (100% de sucesso)
 .venv\Scripts\pytest tests/ -v
 ```
 
