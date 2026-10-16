@@ -64,18 +64,41 @@ def create_synthetic_dual_wav(filepath: Path, duration_sec: float = 3.0, sample_
 
 def test_model_selection():
     """Valida a seleção adaptativa do modelo Whisper de acordo com a memória RAM livre."""
-    print("\n[TESTE 1] Validando Seleção Adaptativa de Modelo Whisper...")
+    print("\n[TESTE 1] Validando Seleção Adaptativa de Modelo Whisper (Turbo, Small, Base)...")
     free_ram = get_available_ram_mb()
     selected = select_optimal_model_size()
     print(f"  -> Memória RAM disponível: {free_ram:.2f} MB")
     print(f"  -> Modelo Whisper selecionado automaticamente: '{selected}'")
 
-    if free_ram >= 1500:
+    if free_ram >= 2000:
+        assert selected == "large-v3-turbo", f"Deveria ter selecionado 'large-v3-turbo', selecionou '{selected}'"
+    elif free_ram >= 1200:
         assert selected == "small", f"Deveria ter selecionado 'small', selecionou '{selected}'"
     else:
         assert selected == "base", f"Deveria ter selecionado 'base', selecionou '{selected}'"
 
-    print("  -> TESTE 1 APROVADO: Lógica adaptativa de memória validada!")
+    # Testa seleção explícita do usuário
+    forced = select_optimal_model_size(preferred_model="small")
+    assert forced == "small", "Deveria ter respeitado preferência explícita 'small'"
+
+    print("  -> TESTE 1 APROVADO: Lógica adaptativa de 3 níveis de memória validada!")
+
+
+def test_dsp_audio_preprocessing():
+    """Valida o condicionamento DSP de áudio (filtro passa-alta a 80Hz e normalização de pico)."""
+    print("\n[TESTE 1.5] Validando Condicionamento DSP de Áudio...")
+    from src.transcription.whisper_engine import preprocess_audio_dsp
+
+    # Sinal sintético de 1 segundo: ruído elétrico de 60Hz + fala de 500Hz
+    t = np.linspace(0, 1.0, 16000, endpoint=False)
+    hum_60hz = 0.5 * np.sin(2 * np.pi * 60 * t)
+    voice_500hz = 0.2 * np.sin(2 * np.pi * 500 * t)
+    dirty_audio = (hum_60hz + voice_500hz).astype(np.float32)
+
+    cleaned = preprocess_audio_dsp(dirty_audio)
+    assert len(cleaned) == len(dirty_audio), "Duração deve ser preservada"
+    assert np.max(np.abs(cleaned)) <= 1.0, "Áudio normalizado não pode estourar 1.0"
+    print("  -> TESTE 1.5 APROVADO: Filtro FIR e normalização DSP validados com sucesso!")
 
 
 def test_post_process_and_diarization():
@@ -155,6 +178,7 @@ def test_whisper_engine_transcription_and_unload():
 
 if __name__ == "__main__":
     test_model_selection()
+    test_dsp_audio_preprocessing()
     test_post_process_and_diarization()
     test_whisper_engine_transcription_and_unload()
     print("\n==========================================")

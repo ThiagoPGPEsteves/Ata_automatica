@@ -49,7 +49,7 @@ if sys.platform == "win32":
 from PyQt6.QtWidgets import QApplication, QMessageBox
 from PyQt6.QtCore import Qt
 
-from src.config import OUTPUT_DIR, TEMP_DIR, OLLAMA_MODEL, OLLAMA_URL
+from src.config import OUTPUT_DIR, TEMP_DIR, OLLAMA_MODEL, OLLAMA_URL, get_user_settings
 from src.audio.devices import get_default_devices
 from src.audio.recorder import DualAudioRecorder
 from src.minutes.ollama_client import OllamaClient
@@ -73,8 +73,9 @@ class AtaApplicationController:
         # 1. Componentes do Backend
         self.recorder = DualAudioRecorder()
         self.current_worker: Optional[PipelineWorker] = None
-        self.selected_mic_id: Optional[int] = None
-        self.selected_loopback_id: Optional[int] = None
+        saved_prefs = get_user_settings()
+        self.selected_mic_id: Optional[int] = saved_prefs.get("mic_device_id")
+        self.selected_loopback_id: Optional[int] = saved_prefs.get("loopback_device_id")
 
         # 2. Componentes da Interface Gráfica
         self.floating_widget = FloatingWidget(recorder=self.recorder)

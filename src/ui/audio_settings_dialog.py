@@ -5,7 +5,7 @@ com proteção ativa para cancelamento de crosstalk em fones P3 (3.5mm).
 """
 
 from typing import Optional, List
-from PyQt6.QtCore import Qt, pyqtSignal, QTimer
+from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
     QDialog,
     QVBoxLayout,
@@ -14,11 +14,16 @@ from PyQt6.QtWidgets import (
     QComboBox,
     QPushButton,
     QFrame,
-    QProgressBar,
+    QTextEdit,
     QMessageBox,
 )
 from PyQt6.QtGui import QFont
 
+from src.config import (
+    get_user_settings,
+    save_user_settings,
+    DEFAULT_CORPORATE_GLOSSARY,
+)
 from src.audio.devices import (
     list_available_inputs,
     list_available_outputs_loopback,
@@ -29,7 +34,8 @@ from src.audio.devices import (
 
 class AudioSettingsDialog(QDialog):
     """
-    Diálogo para seleção e teste de dispositivos de entrada e saída.
+    Diálogo para seleção e teste de dispositivos de entrada/saída,
+    perfil do motor de transcrição Whisper e glossário de termos corporativos.
     """
 
     devices_selected = pyqtSignal(int, int)  # (mic_device_id, loopback_device_id)
@@ -41,17 +47,21 @@ class AudioSettingsDialog(QDialog):
         parent: Optional[QDialog] = None,
     ):
         super().__init__(parent)
-        self.setWindowTitle("Configuração de Áudio & Fones de Ouvido")
-        self.setFixedSize(520, 420)
+        self.setWindowTitle("Configuração de Áudio & Motor de Transcrição")
+        self.setFixedSize(580, 580)
 
-        self.current_mic_id = current_mic_id
-        self.current_loopback_id = current_loopback_id
+        # Carrega configurações salvas do usuário
+        self.saved_settings = get_user_settings()
+
+        self.current_mic_id = current_mic_id if current_mic_id is not None else self.saved_settings.get("mic_device_id")
+        self.current_loopback_id = current_loopback_id if current_loopback_id is not None else self.saved_settings.get("loopback_device_id")
 
         self.input_devices: List[AudioDeviceInfo] = []
         self.loopback_devices: List[AudioDeviceInfo] = []
 
         self._init_ui()
         self._load_devices()
+        self._load_transcription_settings()
 
     def _init_ui(self):
         self.setStyleSheet(
@@ -63,7 +73,8 @@ class AudioSettingsDialog(QDialog):
             }
             QLabel {
                 color: #E2E8F0;
-                font-size: 12px;
+                font-size: 11px;
+                font-weight: 600;
             }
             QComboBox {
                 background-color: #2D3748;
@@ -81,6 +92,15 @@ class AudioSettingsDialog(QDialog):
                 color: #FFFFFF;
                 selection-background-color: #2E75B6;
                 selection-color: #FFFFFF;
+            }
+            QTextEdit {
+                background-color: #2D3748;
+                color: #FFFFFF;
+                border: 1px solid #4A5568;
+                border-radius: 6px;
+                padding: 8px;
+                font-size: 11px;
+                font-family: 'Segoe UI', Calibri, sans-serif;
             }
             QPushButton {
                 border-radius: 6px;
@@ -109,25 +129,25 @@ class AudioSettingsDialog(QDialog):
                 background-color: #1E293B;
                 border: 1px solid #38BDF8;
                 border-radius: 8px;
-                padding: 10px;
+                padding: 8px 12px;
             }
             """
         )
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(14)
+        layout.setContentsMargins(20, 18, 20, 18)
+        layout.setSpacing(10)
 
         # Cabeçalho
-        lbl_title = QLabel("Dispositivos de Captura da Reunião", self)
-        lbl_title.setStyleSheet("font-size: 16px; font-weight: bold; color: #38BDF8;")
+        lbl_title = QLabel("Configuração de Áudio & IA de Transcrição", self)
+        lbl_title.setStyleSheet("font-size: 15px; font-weight: bold; color: #38BDF8;")
         layout.addWidget(lbl_title)
 
         lbl_desc = QLabel(
-            "Selecione o microfone para sua voz e o dispositivo onde você ouve o Teams.",
+            "Personalize a captura de áudio, a qualidade do Whisper e os termos da sua empresa.",
             self,
         )
-        lbl_desc.setStyleSheet("color: #94A3B8; font-size: 11px;")
+        lbl_desc.setStyleSheet("color: #94A3B8; font-size: 11px; font-weight: normal;")
         layout.addWidget(lbl_desc)
 
         # 1. Microfone do Usuário
@@ -140,22 +160,40 @@ class AudioSettingsDialog(QDialog):
         self.combo_loopback = QComboBox(self)
         layout.addWidget(self.combo_loopback)
 
-        # 3. Card Informativo de Proteção Anti-Crosstalk
+        # 3. Perfil de Transcrição Whisper
+        layout.addWidget(QLabel("QUALIDADE DA TRANSCRIÇÃO LOCAL (WHISPER):", self))
+        self.combo_model = QComboBox(self)
+        self.combo_model.addItem("🤖 Automático (Seleciona pelo consumo de RAM livre)", "auto")
+        self.combo_model.addItem("✨ Alta Fidelidade (large-v3-turbo - Recomendado)", "large-v3-turbo")
+        self.combo_model.addItem("⚡ Equilibrado (small - Rápido)", "small")
+        self.combo_model.addItem("🪶 Ultra Leve (base - Mínimo consumo)", "base")
+        layout.addWidget(self.combo_model)
+
+        # 4. Glossário Corporativo
+        layout.addWidget(QLabel("GLOSSÁRIO & TERMOS FREQUENTES DA EMPRESA (INITIAL PROMPT):", self))
+        self.txt_glossary = QTextEdit(self)
+        self.txt_glossary.setPlaceholderText(
+            "Digite palavras-chave, jargões, siglas da área ou nomes de participantes separados por vírgula..."
+        )
+        self.txt_glossary.setFixedHeight(65)
+        layout.addWidget(self.txt_glossary)
+
+        # 5. Card Informativo de Proteção Anti-Crosstalk
         card_shield = QFrame(self)
         card_shield.setObjectName("cardShield")
         c_layout = QVBoxLayout(card_shield)
-        c_layout.setContentsMargins(10, 8, 10, 8)
-        c_layout.setSpacing(4)
+        c_layout.setContentsMargins(8, 6, 8, 6)
+        c_layout.setSpacing(2)
 
-        lbl_shield_title = QLabel("🛡️ Blindagem Ativa contra Crosstalk em Fones P3 (3.5mm)", card_shield)
-        lbl_shield_title.setStyleSheet("font-weight: bold; color: #38BDF8; font-size: 11px;")
+        lbl_shield_title = QLabel("🛡️ Blindagem de Hardware P3 & Anti-Alucinação Ativa", card_shield)
+        lbl_shield_title.setStyleSheet("font-weight: bold; color: #38BDF8; font-size: 10.5px;")
         lbl_shield_desc = QLabel(
-            "O pipeline possui cancelamento cruzado de eco e indução elétrica de hardware. "
-            "Mesmo com fones de plugue compartilhado, o vazamento elétrico é filtrado automaticamente.",
+            "Filtro passa-alta a 80 Hz, normalização e de-duplicação temporal ativas. "
+            "Elimina repetições de fala e indução elétrica em fones combo P3.",
             card_shield,
         )
         lbl_shield_desc.setWordWrap(True)
-        lbl_shield_desc.setStyleSheet("color: #CBD5E1; font-size: 10px;")
+        lbl_shield_desc.setStyleSheet("color: #CBD5E1; font-size: 10px; font-weight: normal;")
 
         c_layout.addWidget(lbl_shield_title)
         c_layout.addWidget(lbl_shield_desc)
@@ -218,15 +256,36 @@ class AudioSettingsDialog(QDialog):
         if self.combo_loopback.count() > 0:
             self.combo_loopback.setCurrentIndex(selected_loop_idx)
 
+    def _load_transcription_settings(self):
+        """Carrega perfil do modelo e glossário nas entradas visuais."""
+        current_profile = self.saved_settings.get("model_profile", "auto")
+        for i in range(self.combo_model.count()):
+            if self.combo_model.itemData(i) == current_profile:
+                self.combo_model.setCurrentIndex(i)
+                break
+
+        glossary_text = self.saved_settings.get("corporate_glossary", DEFAULT_CORPORATE_GLOSSARY)
+        self.txt_glossary.setPlainText(glossary_text)
+
     def _on_save_clicked(self):
-        """Salva a escolha do usuário e emite o sinal."""
+        """Salva as escolhas do usuário no arquivo config_user.json e emite o sinal."""
         mic_id = self.combo_mic.currentData()
         loop_id = self.combo_loopback.currentData()
+        model_profile = self.combo_model.currentData() or "auto"
+        glossary_text = self.txt_glossary.toPlainText().strip() or DEFAULT_CORPORATE_GLOSSARY
 
         if mic_id is not None:
             self.current_mic_id = int(mic_id)
         if loop_id is not None:
             self.current_loopback_id = int(loop_id)
+
+        # Salva persistentemente
+        save_user_settings({
+            "mic_device_id": self.current_mic_id,
+            "loopback_device_id": self.current_loopback_id,
+            "model_profile": model_profile,
+            "corporate_glossary": glossary_text,
+        })
 
         self.devices_selected.emit(self.current_mic_id or 0, self.current_loopback_id or 0)
         self.accept()

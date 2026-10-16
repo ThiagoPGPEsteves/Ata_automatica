@@ -78,6 +78,11 @@ class PipelineWorker(QThread):
                 return
 
             # 2. Fase de Transcrição (faster-whisper)
+            from src.config import get_user_settings
+            user_settings = get_user_settings()
+            preferred_model = user_settings.get("model_profile", "auto")
+            corporate_glossary = user_settings.get("corporate_glossary")
+
             self.progress_changed.emit("Iniciando transcrição de áudio com Whisper...", 15)
 
             # Separa os canais em memória ou temporários para diarização
@@ -86,16 +91,16 @@ class PipelineWorker(QThread):
             if self._is_cancelled:
                 return
 
-            self.progress_changed.emit("Transcrevendo canal de voz (Você)...", 25)
             # Utiliza o gerenciador de contexto para garantir descarregamento da RAM
-            with WhisperEngine() as engine:
-                mic_segments = engine.transcribe(mic_wav)
+            with WhisperEngine(model_size=preferred_model) as engine:
+                self.progress_changed.emit(f"Transcrevendo canal de voz (Você) com Whisper '{engine.model_size}'...", 25)
+                mic_segments = engine.transcribe(mic_wav, initial_prompt=corporate_glossary)
 
                 if self._is_cancelled:
                     return
 
-                self.progress_changed.emit("Transcrevendo canal do Teams (Participantes)...", 45)
-                teams_segments = engine.transcribe(teams_wav)
+                self.progress_changed.emit(f"Transcrevendo canal do Teams (Participantes) com Whisper '{engine.model_size}'...", 45)
+                teams_segments = engine.transcribe(teams_wav, initial_prompt=corporate_glossary)
 
             # Neste ponto o Whisper foi descarregado e a RAM voltou ao nível base
             self.progress_changed.emit("Whisper descarregado da memória. Sincronizando diálogos...", 60)
