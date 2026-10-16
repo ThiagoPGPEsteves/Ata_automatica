@@ -516,9 +516,9 @@ class ReviewDialog(QDialog):
 
             def run(self):
                 try:
-                    from src.config import get_user_settings
-                    user_settings = get_user_settings()
-                    user_speaker_name = user_settings.get("user_speaker_name", "Você")
+                    from src.config import get_typed_user_settings
+                    user_settings = get_typed_user_settings()
+                    user_speaker_name = user_settings.user_speaker_name
 
                     gen = MinutesGenerator()
                     minutes_obj, _ = gen.generate(
@@ -578,3 +578,9 @@ class ReviewDialog(QDialog):
         if clipboard:
             clipboard.setText(full_text)
             QMessageBox.information(self, "Sucesso", "Texto da ata copiado para a área de transferência!")
+
+    def closeEvent(self, event):
+        """Garante encerramento seguro de workers ao fechar a janela."""
+        if hasattr(self, "_regen_worker") and self._regen_worker and self._regen_worker.isRunning():
+            self._regen_worker.wait(1000)
+        super().closeEvent(event)

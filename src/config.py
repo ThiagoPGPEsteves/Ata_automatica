@@ -4,14 +4,20 @@ Configurado com foco em estrito respeito ao orçamento de 4GB de RAM.
 """
 
 from pathlib import Path
+from dataclasses import dataclass, asdict
+from typing import Optional, Dict, Any, Union
 
 # Diretórios Base
 ROOT_DIR = Path(__file__).resolve().parent.parent
 TEMP_DIR = ROOT_DIR / "temp"
 OUTPUT_DIR = ROOT_DIR / "output"
+SESSIONS_DIR = ROOT_DIR / "sessions"
+LOGS_DIR = ROOT_DIR / "logs"
 
 TEMP_DIR.mkdir(parents=True, exist_ok=True)
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
+LOGS_DIR.mkdir(parents=True, exist_ok=True)
 
 # Configurações de Áudio
 # 16.000 Hz é a taxa nativa utilizada pelo Whisper, economizando memória e CPU
@@ -70,37 +76,73 @@ DEFAULT_TRANSCRIPT_PATH = TEMP_DIR / "transcript.json"
 USER_CONFIG_PATH = ROOT_DIR / "config_user.json"
 
 
-def get_user_settings() -> dict:
-    """Carrega as preferências do usuário salvas no disco com fallback para os padrões."""
+@dataclass
+class UserSettings:
+    """Configurações do usuário tipadas com suporte a versionamento de schema."""
+    schema_version: int = 1
+    mic_device_id: Optional[int] = None
+    mic_device_name: Optional[str] = None
+    loopback_device_id: Optional[int] = None
+    loopback_device_name: Optional[str] = None
+    model_profile: str = "auto"
+    corporate_glossary: str = DEFAULT_CORPORATE_GLOSSARY
+    user_speaker_name: str = "Você"
+    audio_retention_days: int = 7
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "UserSettings":
+        return cls(
+            schema_version=int(data.get("schema_version", 1)),
+            mic_device_id=data.get("mic_device_id"),
+            mic_device_name=data.get("mic_device_name"),
+            loopback_device_id=data.get("loopback_device_id"),
+            loopback_device_name=data.get("loopback_device_name"),
+            model_profile=str(data.get("model_profile", "auto")),
+            corporate_glossary=str(data.get("corporate_glossary", DEFAULT_CORPORATE_GLOSSARY)),
+            user_speaker_name=str(data.get("user_speaker_name", "Você")),
+            audio_retention_days=int(data.get("audio_retention_days", 7)),
+        )
+
+
+def get_typed_user_settings() -> UserSettings:
+    """Retorna as configurações do usuário como instância tipada de UserSettings."""
     import json
-    defaults = {
-        "mic_device_id": None,
-        "mic_device_name": None,
-        "loopback_device_id": None,
-        "loopback_device_name": None,
-        "model_profile": "auto",  # 'auto', 'large-v3-turbo', 'small', 'base'
-        "corporate_glossary": DEFAULT_CORPORATE_GLOSSARY,
-        "user_speaker_name": "Você",
-    }
+    default_obj = UserSettings()
     if not USER_CONFIG_PATH.exists():
-        return defaults
+        return default_obj
     try:
         with open(USER_CONFIG_PATH, "r", encoding="utf-8") as f:
             data = json.load(f)
-            defaults.update(data)
-            return defaults
+            return UserSettings.from_dict(data)
     except Exception:
-        return defaults
+        return default_obj
 
 
-def save_user_settings(settings: dict) -> bool:
-    """Salva as preferências do usuário no arquivo config_user.json."""
+def get_user_settings() -> dict:
+    """Carrega as preferências do usuário como dicionário (retrocompatível com todo o código existente)."""
+    return get_typed_user_settings().to_dict()
+
+
+def save_user_settings(settings: Union[dict, UserSettings]) -> bool:
+    """Salva as preferências do usuário no arquivo config_user.json (aceita dict ou UserSettings)."""
     import json
     try:
-        current = get_user_settings()
-        current.update(settings)
+        current_dict = get_user_settings()
+        if isinstance(settings, UserSettings):
+            new_data = settings.to_dict()
+        else:
+            new_data = dict(settings)
+
+        current_dict.update(new_data)
+        # Garante schema_version
+        if "schema_version" not in current_dict:
+            current_dict["schema_version"] = 1
+
         with open(USER_CONFIG_PATH, "w", encoding="utf-8") as f:
-            json.dump(current, f, ensure_ascii=False, indent=2)
+            json.dump(current_dict, f, ensure_ascii=False, indent=2)
         return True
     except Exception:
         return False

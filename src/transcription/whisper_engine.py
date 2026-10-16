@@ -225,10 +225,12 @@ class WhisperEngine:
         vad_filter: bool = True,
         initial_prompt: Optional[str] = None,
         hotwords: Optional[str] = None,
+        cancel_token: Optional[Any] = None,
     ) -> List[Dict[str, Any]]:
         """
         Transcreve o áudio (arquivo no disco ou array numpy mono 16kHz float32/int16).
         Utiliza hotwords para reaplicação contínua de termos técnicos em cada janela de 30s.
+        Suporta cancel_token para interrupção imediata sem travamento de thread.
         Retorna uma lista de dicionários contendo start, end e text.
         """
         if not self._is_loaded:
@@ -264,6 +266,11 @@ class WhisperEngine:
 
         results = []
         for segment in segments_generator:
+            if cancel_token and getattr(cancel_token, "is_cancelled", False):
+                logger.info(
+                    "Cancelamento solicitado pelo usuário. Interrompendo transcrição Whisper imediatamente."
+                )
+                break
             text = segment.text.strip()
             if text:
                 results.append(

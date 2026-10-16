@@ -8,21 +8,47 @@ import sys
 import os
 import argparse
 import logging
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Optional
-
-# Configuração de logging corporativo
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    datefmt="%H:%M:%S",
-)
-logger = logging.getLogger("AtaAutomatica")
 
 # Garante que o diretório raiz esteja no sys.path
 ROOT_DIR = Path(__file__).resolve().parent
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
+
+def setup_logging(debug: bool = False):
+    """Configura logging centralizado com RotatingFileHandler (logs/app.log) e console."""
+    from src.config import LOGS_DIR
+    LOGS_DIR.mkdir(parents=True, exist_ok=True)
+    log_file = LOGS_DIR / "app.log"
+
+    root = logging.getLogger()
+    root.setLevel(logging.DEBUG if debug else logging.INFO)
+
+    for h in list(root.handlers):
+        root.removeHandler(h)
+
+    formatter = logging.Formatter(
+        "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        datefmt="%H:%M:%S",
+    )
+
+    console_h = logging.StreamHandler(sys.stdout)
+    console_h.setFormatter(formatter)
+    root.addHandler(console_h)
+
+    file_h = RotatingFileHandler(
+        log_file,
+        maxBytes=5 * 1024 * 1024,
+        backupCount=3,
+        encoding="utf-8",
+    )
+    file_h.setFormatter(formatter)
+    root.addHandler(file_h)
+
+setup_logging(debug=False)
+logger = logging.getLogger("AtaAutomatica")
 
 # Auto-reexecução com o interpretador do ambiente virtual (.venv):
 # Se o usuário executar 'python run.py' pelo Python global do Windows sem ativar o venv,
@@ -355,6 +381,75 @@ def run_preflight_checks() -> bool:
     return True
 
 
+def handle_list_sessions():
+    """Exibe no terminal a listagem de todas as sessões registradas."""
+    from src.pipeline.session import SessionStore
+    store = SessionStore()
+    sessions = store.list_sessions()
+    print("\n" + "=" * 85)
+    print("  SESSÕES REGISTRADAS DE REUNIÃO (sessions/)")
+    print("=" * 85)
+    if not sessions:
+        print("  Nenhuma sessão encontrada em sessions/.")
+        print("=" * 85 + "\n")
+        return
+
+    print(f"{'ID da Sessão':<22} | {'Data':<17} | {'Áudio':<6} | {'Transcrito':<10} | {'Ata':<6} | {'DOCX':<6}")
+    print("-" * 85)
+    for s in sessions:
+        manifest = s.load_manifest()
+        created_at = manifest.get("created_at", s.session_id)[:16].replace("T", " ")
+        has_aud = "Sim" if s.has_audio() else "Não"
+        has_tra = "Sim" if s.has_transcript() else "Não"
+        has_min = "Sim" if s.has_minutes() else "Não"
+        has_doc = "Sim" if s.has_docx() else "Não"
+        print(f"{s.session_id:<22} | {created_at:<17} | {has_aud:<6} | {has_tra:<10} | {has_min:<6} | {has_doc:<6}")
+    print("=" * 85 + "\n")
+
+
+def handle_cleanup_audio(retention_days: Optional[int] = None):
+    """Executa o expurgo de áudios antigos conforme LGPD."""
+    from src.pipeline.session import SessionStore
+    from src.config import get_typed_user_settings
+    settings = get_typed_user_settings()
+    days = retention_days if retention_days is not None else settings.audio_retention_days
+    store = SessionStore()
+    print(f"\n[LGPD] Verificando retenção de áudio (limite: {days} dias)...")
+    purged = store.cleanup_old_audio(retention_days=days)
+    if purged:
+        print(f"  [OK] Áudio purgado com sucesso de {len(purged)} sessão(ões): {', '.join(purged)}")
+    else:
+        print("  [OK] Nenhuma sessão com áudio expirado necessitando expurgo.")
+    print("  Transcrição, atas estruturadas e documentos Word permanecem preservados.\n")
+
+
+def handle_reprocess(session_id: str, from_stage_str: str):
+    """Executa o reprocessamento de uma sessão via CLI headless."""
+    from src.pipeline.session import SessionStore
+    from src.pipeline.meeting_pipeline import MeetingPipeline
+    store = SessionStore()
+    session = store.get_session(session_id)
+    if not session:
+        print(f"\n[ERRO] Sessão '{session_id}' não encontrada em sessions/.")
+        sys.exit(1)
+
+    print(f"\n[PIPELINE CLI] Iniciando reprocessamento da sessão '{session_id}' a partir de '{from_stage_str}'...")
+    pipeline = MeetingPipeline(
+        session=session,
+        on_progress=lambda msg, pct: print(f"  [{pct:>3}%] {msg}"),
+        on_chunk=lambda tok: (sys.stdout.write(tok), sys.stdout.flush()) if tok else None,
+    )
+    try:
+        result = pipeline.run(from_stage=from_stage_str)
+        print("\n\n" + "=" * 60)
+        print("  REPROCESSAMENTO CONCLUÍDO COM SUCESSO!")
+        print(f"  Documento Word gerado: {result.get('docx_path')}")
+        print("=" * 60 + "\n")
+    except Exception as e:
+        print(f"\n\n[ERRO FATAL] Falha no reprocessamento: {e}")
+        sys.exit(1)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Ata Automática para Microsoft Teams")
     parser.add_argument(
@@ -372,11 +467,52 @@ def main():
         action="store_true",
         help="Ativa mensagens detalhadas de depuração no console.",
     )
+    parser.add_argument(
+        "--list-sessions",
+        action="store_true",
+        help="Lista todas as sessões gravadas e seus artefatos.",
+    )
+    parser.add_argument(
+        "--cleanup-audio",
+        action="store_true",
+        help="Executa expurgo LGPD de áudios antigos conforme dias de retenção configurados.",
+    )
+    parser.add_argument(
+        "--retention-days",
+        type=int,
+        default=None,
+        help="Sobrescreve a quantidade de dias para o expurgo de áudio com --cleanup-audio.",
+    )
+    parser.add_argument(
+        "--reprocess",
+        type=str,
+        default=None,
+        metavar="SESSION_ID",
+        help="Reprocessa uma sessão em modo headless via CLI.",
+    )
+    parser.add_argument(
+        "--from-stage",
+        type=str,
+        default="transcribe",
+        choices=["transcribe", "merge", "generate", "export"],
+        help="Estágio inicial para reprocessamento (padrão: transcribe).",
+    )
 
     args = parser.parse_args()
 
-    if args.debug:
-        logging.getLogger().setLevel(logging.DEBUG)
+    setup_logging(debug=args.debug)
+
+    if args.list_sessions:
+        handle_list_sessions()
+        sys.exit(0)
+
+    if args.cleanup_audio:
+        handle_cleanup_audio(retention_days=args.retention_days)
+        sys.exit(0)
+
+    if args.reprocess:
+        handle_reprocess(session_id=args.reprocess, from_stage_str=args.from_stage)
+        sys.exit(0)
 
     run_preflight_checks()
 
@@ -389,3 +525,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
