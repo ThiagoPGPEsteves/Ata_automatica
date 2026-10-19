@@ -122,3 +122,23 @@ def test_stereo_interleaving_and_separation(tmp_path: Path):
 
         assert np.array_equal(extracted_mic, mic_wave)
         assert np.array_equal(extracted_loop, loop_wave)
+
+
+@pytest.mark.unit
+def test_disk_writer_safe_when_closed(tmp_path: Path):
+    """Valida que chamar write_chunk em arquivo fechado retorna False com segurança e sem lançar RuntimeError."""
+    wav_path = tmp_path / "closed_test.wav"
+    writer = AudioDiskWriter(filepath=wav_path, sample_rate=16000, channels=2)
+
+    # 1. Antes de abrir
+    dummy_data = b"\x00" * 320
+    assert writer.write_chunk(dummy_data) is False
+
+    # 2. Aberto
+    writer.open()
+    assert writer.write_chunk(dummy_data) is True
+
+    # 3. Após fechar (simulação de término de gravação e chamada residual do loop)
+    writer.close()
+    assert writer.is_active is False
+    assert writer.write_chunk(dummy_data) is False

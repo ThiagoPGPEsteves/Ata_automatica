@@ -359,7 +359,9 @@ class DualAudioRecorder:
             self._pyaudio_instance = None
 
         if self._writer_thread and self._writer_thread.is_alive():
-            self._writer_thread.join(timeout=5.0)
+            self._writer_thread.join(timeout=10.0)
+            if self._writer_thread.is_alive():
+                logger.warning("Writer thread ainda ativa após timeout de 10s no stop().")
 
         saved_path = self.writer.close()
         self._mic_level = 0.0
@@ -425,7 +427,7 @@ class DualAudioRecorder:
 
             # Escreve o mínimo disponível em múltiplos de chunk_target_len
             min_len = min(len(mic_buf), len(loop_buf))
-            if min_len >= chunk_target_len:
+            if min_len >= chunk_target_len and self.writer.is_active:
                 write_len = (min_len // chunk_target_len) * chunk_target_len
 
                 sub_mic = mic_buf[:write_len]
@@ -452,7 +454,7 @@ class DualAudioRecorder:
         # Flush final após o término da gravação:
         # Se restaram amostras acumuladas em apenas um canal, alinha com silêncio e escreve
         final_len = max(len(mic_buf), len(loop_buf))
-        if final_len > 0:
+        if final_len > 0 and self.writer.is_active:
             if len(mic_buf) < final_len:
                 mic_buf = np.pad(mic_buf, (0, final_len - len(mic_buf)))
             if len(loop_buf) < final_len:

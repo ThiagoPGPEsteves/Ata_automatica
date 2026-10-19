@@ -53,15 +53,21 @@ class AudioDiskWriter:
             self._is_open = True
             logger.info("Arquivo WAV aberto para streaming em disco: %s", self.filepath)
 
-    def write_chunk(self, data: bytes):
+    def write_chunk(self, data: bytes) -> bool:
         """Escreve um chunk de bytes de áudio diretamente no arquivo e descarrega o buffer."""
         with self._lock:
             if not self._is_open or not self._wav_file:
-                raise RuntimeError("Tentativa de gravar em arquivo WAV fechado.")
+                logger.warning("Tentativa de gravar em arquivo WAV já finalizado ou fechado.")
+                return False
 
-            self._wav_file.writeframes(data)
-            num_frames = len(data) // (self.channels * self.sample_width)
-            self._total_frames += num_frames
+            try:
+                self._wav_file.writeframes(data)
+                num_frames = len(data) // (self.channels * self.sample_width)
+                self._total_frames += num_frames
+                return True
+            except Exception as e:
+                logger.warning("Erro ao escrever frames no arquivo WAV: %s", e)
+                return False
 
     def close(self) -> Path:
         """Finaliza o arquivo WAV, grava os cabeçalhos com o tamanho correto e fecha."""
