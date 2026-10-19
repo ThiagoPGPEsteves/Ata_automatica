@@ -133,3 +133,21 @@ def test_echogate_clean_isolated_audio():
     assert stats["applied"] is False
     assert stats["reason"] == "correlation_below_threshold"
     assert np.array_equal(cleaned_mic, mic)
+
+
+def test_echogate_long_audio_chunked_processing():
+    """Valida o processamento em blocos do EchoGate com áudio longo cruzando múltiplos blocos de 2000 frames."""
+    sr = 16000
+    # 90 segundos = 4500 frames (cruza o limite de chunk_frames=2000 duas vezes)
+    duration_sec = 90.0
+    n_samples = int(sr * duration_sec)
+
+    loopback = np.sin(np.linspace(0, 100, n_samples, dtype=np.float32)) * 0.2
+    mic = np.sin(np.linspace(0, 25, n_samples, dtype=np.float32)) * 0.4
+
+    gate = EchoGate()
+    cleaned_mic, stats = gate.process(mic, loopback, sample_rate=sr)
+
+    assert len(cleaned_mic) == n_samples
+    assert not np.isnan(cleaned_mic).any()
+    assert not np.isinf(cleaned_mic).any()

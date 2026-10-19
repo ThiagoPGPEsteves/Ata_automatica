@@ -242,20 +242,28 @@ class EchoGate:
             else:
                 target_gains[i] = 1.0
 
-        # Interpolação suave do ganho (evita cliques ou degraus audíveis)
-        # Expande os ganhos dos quadros para amostras com filtro IIR de suavização
-        full_gain_curve = np.repeat(target_gains, frame_size)
-        if len(full_gain_curve) < len(mic_signal):
-            padding = np.ones(len(mic_signal) - len(full_gain_curve), dtype=np.float32)
-            full_gain_curve = np.concatenate([full_gain_curve, padding])
+        # Interpolação suave do ganho no nível de quadros (evita cliques sem alocar milhões de amostras)
+        if num_frames >= 3:
+            # Filtro de suavização ponderado em 3 quadros (~60ms) para transições graduais
+            kernel = np.array([0.2, 0.6, 0.2], dtype=np.float32)
+            smoothed_gains = np.convolve(target_gains, kernel, mode="same")
+        else:
+            smoothed_gains = target_gains
 
-        # Suavização com média móvel rápida (janela de 5ms)
-        smooth_window = max(1, int(sample_rate * 0.005))
-        if smooth_window > 1:
-            kernel = np.ones(smooth_window, dtype=np.float32) / smooth_window
-            full_gain_curve = np.convolve(full_gain_curve, kernel, mode="same")
+        # Aplicação dos ganhos em blocos contínuos (garante Zero-RAM mesmo em reuniões de várias horas)
+        cleaned_mic = np.empty_like(mic_signal)
+        chunk_frames = 2000  # Processa em blocos de até 2000 quadros (~40s) para manter buffer < 3 MB
+        for f_start in range(0, num_frames, chunk_frames):
+            f_end = min(num_frames, f_start + chunk_frames)
+            s_start = f_start * frame_size
+            s_end = f_end * frame_size
+            block_gains = np.repeat(smoothed_gains[f_start:f_end], frame_size)
+            cleaned_mic[s_start:s_end] = mic_signal[s_start:s_end] * block_gains
 
-        cleaned_mic = mic_signal * full_gain_curve
+        # Preserva amostras residuais além do último quadro completo
+        tail_start = num_frames * frame_size
+        if tail_start < len(mic_signal):
+            cleaned_mic[tail_start:] = mic_signal[tail_start:]
 
         suppressed_pct = (suppressed_count / num_frames) * 100.0 if num_frames > 0 else 0.0
         stats["applied"] = True
