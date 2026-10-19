@@ -23,6 +23,19 @@ from src.config import OLLAMA_MODEL, OLLAMA_KEEP_ALIVE, OUTPUT_FORMAT_MINUTES, O
 
 logger = logging.getLogger(__name__)
 
+
+def parse_json_safely(raw_text: str) -> Dict[str, Any]:
+    """Faz o parsing robusto de JSON removendo possíveis blocos Markdown (```json ... ```)."""
+    text = raw_text.strip()
+    if text.startswith("```"):
+        lines = text.split("\n")
+        if lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].strip().startswith("```"):
+            lines = lines[:-1]
+        text = "\n".join(lines).strip()
+    return json.loads(text)
+
 # Schema JSON para a etapa Map (extração de notas por bloco de reunião)
 CHUNK_NOTES_SCHEMA: Dict[str, Any] = {
     "type": "object",
@@ -407,7 +420,7 @@ class MinutesGenerator:
                 },
             )
 
-            data = json.loads(raw_response)
+            data = parse_json_safely(raw_response)
             data["document_type"] = output_format
             minutes = MeetingMinutes.from_dict(data)
             minutes.document_type = output_format
@@ -487,16 +500,35 @@ class MinutesGenerator:
                         "num_predict": 1024,
                     },
                 )
-                chunk_data = json.loads(raw_chunk)
-                chunk_notes_list.append(chunk_data)
-                logger.info(
-                    "Bloco %d/%d processado: %d tópicos.",
-                    idx,
-                    total,
-                    len(chunk_data.get("topics", [])),
-                )
+                chunk_data = parse_json_safely(raw_chunk)
+                if isinstance(chunk_data, dict) and (chunk_data.get("topics") or chunk_data.get("highlights")):
+                    chunk_notes_list.append(chunk_data)
+                    logger.info(
+                        "Bloco %d/%d processado: %d tópicos.",
+                        idx,
+                        total,
+                        len(chunk_data.get("topics", [])),
+                    )
+                else:
+                    logger.warning("Bloco %d retornou estrutura sem tópicos ou vazia. Descartado.", idx)
             except Exception as e:
                 logger.warning("Erro ao processar bloco %d no Map (%s). Prosseguindo com os demais.", idx, e)
+
+        # Validação pós-Map: se nenhum bloco produziu notas válidas, aciona fallback imediatamente
+        if not chunk_notes_list:
+            logger.warning(
+                "Nenhum bloco produziu notas válidas na etapa Map (%d blocos analisados). Recorrendo a fallback consolidado.",
+                total,
+            )
+            return self._fallback_markdown_generate(
+                transcript_text="\n\n".join(chunks),
+                meeting_title=meeting_title,
+                meeting_date=meeting_date,
+                meeting_duration=meeting_duration,
+                output_format=output_format,
+                progress_callback=progress_callback,
+                token_callback=token_callback,
+            )
 
         # ETAPA REDUCE: consolida todas as notas no documento definitivo
         if progress_callback:
@@ -536,7 +568,7 @@ class MinutesGenerator:
                 },
             )
 
-            final_data = json.loads(raw_final)
+            final_data = parse_json_safely(raw_final)
             final_data["document_type"] = output_format
             minutes = MeetingMinutes.from_dict(final_data)
             minutes.document_type = output_format

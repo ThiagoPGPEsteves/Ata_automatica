@@ -18,6 +18,7 @@ from src.minutes.generator import (
     MinutesGenerator,
     partition_transcript,
     minutes_to_markdown,
+    parse_json_safely,
     CHUNK_NOTES_SCHEMA,
     MEETING_MINUTES_SCHEMA,
 )
@@ -244,6 +245,56 @@ def test_single_pass_theme_summary():
     assert "| Ação / O Quê |" not in raw_md
 
 
+def test_parse_json_safely():
+    """Valida decodificação resiliente de JSON com ou sem blocos de markdown."""
+    # JSON padrão
+    valid_raw = '{"key": "value", "count": 42}'
+    assert parse_json_safely(valid_raw) == {"key": "value", "count": 42}
+
+    # JSON envolvido em ```json ... ```
+    md_json = '```json\n{"status": "ok", "items": [1, 2]}\n```'
+    assert parse_json_safely(md_json) == {"status": "ok", "items": [1, 2]}
+
+    # JSON envolvido em ``` ... ``` sem identificador
+    plain_fence = '```\n{"result": true}\n```'
+    assert parse_json_safely(plain_fence) == {"result": True}
+
+
+def test_map_reduce_fallback_when_map_returns_empty_notes():
+    """Valida acionamento imediato do fallback quando todos os blocos do Map falham ou retornam vazios."""
+    mock_client = MagicMock()
+    mock_client.is_available.return_value = True
+
+    # Cria transcrição longa para disparar Map-Reduce
+    speech_turns = [
+        f"[{i:02d}:00:00] [Thiago]: Discutindo bloco longo {i} com informações importantes."
+        for i in range(100)
+    ]
+    long_transcript = "\n".join(speech_turns)
+
+    # Simula erro de retorno no Map para todos os blocos (ex: exceção do Ollama ou payload sem tópicos)
+    def mock_generate_map_fail(**kwargs):
+        # Se for o fallback Markdown, retorna conteúdo formatado
+        if "response_format" not in kwargs:
+            return "# ATA DE REUNIÃO: Reunião de Fallback Map Vazio\n\n## 2. Resumo Executivo\nFallback acionado com sucesso.\n"
+        # Durante as chamadas do Map, simula falha/invalidez
+        raise RuntimeError("Falha de conexão durante etapa Map")
+
+    mock_client.generate.side_effect = mock_generate_map_fail
+
+    generator = MinutesGenerator(ollama_client=mock_client)
+    minutes, raw_md = generator.generate(
+        transcript_text=long_transcript,
+        meeting_title="Reunião com Map Quebrado",
+        meeting_date="19/10/2026",
+        user_speaker_name="Thiago",
+    )
+
+    assert isinstance(minutes, MeetingMinutes)
+    assert "Fallback" in minutes.title or "Reunião com Map Quebrado" in minutes.title or len(raw_md) > 0
+    assert "Fallback acionado com sucesso" in raw_md
+
+
 if __name__ == "__main__":
     test_partition_transcript_short()
     test_partition_transcript_long()
@@ -251,4 +302,6 @@ if __name__ == "__main__":
     test_map_reduce_long_meeting()
     test_generator_fallback_on_ollama_json_error()
     test_single_pass_theme_summary()
+    test_parse_json_safely()
+    test_map_reduce_fallback_when_map_returns_empty_notes()
     print("\nTODOS OS TESTES DO MINUTES GENERATOR FORAM APROVADOS COM SUCESSO!")
