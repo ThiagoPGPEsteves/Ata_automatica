@@ -12,11 +12,14 @@ from src.minutes.ollama_client import OllamaClient
 from src.minutes.parser import MeetingMinutes, ActionItem, MinutesParser
 from src.minutes.prompts import (
     generate_structured_minutes_prompt,
+    generate_theme_summary_prompt,
     generate_map_chunk_prompt,
+    generate_theme_map_chunk_prompt,
     generate_reduce_prompt,
+    generate_theme_reduce_prompt,
     generate_meeting_minutes_prompt,
 )
-from src.config import OLLAMA_MODEL, OLLAMA_KEEP_ALIVE
+from src.config import OLLAMA_MODEL, OLLAMA_KEEP_ALIVE, OUTPUT_FORMAT_MINUTES, OUTPUT_FORMAT_THEME_SUMMARY
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +68,29 @@ CHUNK_NOTES_SCHEMA: Dict[str, Any] = {
         },
     },
     "required": ["topics", "decisions", "action_items"],
+}
+
+# Schema JSON para etapa Map de Resumo Temático (sem exigência de ações ou decisões)
+THEME_CHUNK_NOTES_SCHEMA: Dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "topics": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "topic": {"type": "string"},
+                    "details": {"type": "string"},
+                },
+                "required": ["topic", "details"],
+            },
+        },
+        "highlights": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+    },
+    "required": ["topics"],
 }
 
 # Schema JSON para a ata final completa (Single-pass ou Reduce)
@@ -121,6 +147,36 @@ MEETING_MINUTES_SCHEMA: Dict[str, Any] = {
     "required": ["title", "executive_summary", "decisions", "action_items"],
 }
 
+# Schema JSON para Resumo Temático (Single-pass ou Reduce) - focado em temas, sem obrigatoriedade de decisões/ações
+THEME_SUMMARY_SCHEMA: Dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "title": {"type": "string"},
+        "date": {"type": "string"},
+        "participants": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+        "executive_summary": {"type": "string"},
+        "topics": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "topic": {"type": "string"},
+                    "details": {"type": "string"},
+                },
+                "required": ["topic", "details"],
+            },
+        },
+        "next_steps": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+    },
+    "required": ["title", "executive_summary", "topics"],
+}
+
 
 def partition_transcript(
     transcript_text: str,
@@ -157,6 +213,46 @@ def partition_transcript(
 
 def minutes_to_markdown(m: MeetingMinutes) -> str:
     """Converte o objeto estruturado MeetingMinutes em um documento Markdown formatado."""
+    if m.is_theme_summary:
+        md: List[str] = [f"# RESUMO DE TEMAS: {m.title}\n"]
+
+        md.append("## 1. Informações Gerais")
+        md.append(f"- Data: {m.date or 'Data da gravação'}")
+        if m.participants:
+            md.append(f"- Participantes: {', '.join(m.participants)}")
+        else:
+            md.append("- Participantes: Identificados por canal na transcrição")
+
+        md.append("\n## 2. Visão Geral da Discussão")
+        md.append(m.executive_summary or "Visão geral não gerada.")
+
+        md.append("\n## 3. Temas e Tópicos Discutidos")
+        if m.topics:
+            for t in m.topics:
+                md.append(f"### {t.get('topic', 'Tema')}")
+                if t.get("details"):
+                    md.append(t["details"])
+        else:
+            md.append("Temas abordados registrados no diálogo transcrito.")
+
+        if m.next_steps:
+            md.append("\n## 4. Destaques e Observações Relevantes")
+            for s in m.next_steps:
+                md.append(f"- {s}")
+
+        if m.decisions:
+            md.append("\n## Decisões Mencionadas")
+            for d in m.decisions:
+                md.append(f"- {d}")
+
+        if m.action_items:
+            md.append("\n## Ações Mencionadas")
+            for a in m.action_items:
+                ev_s = f" [{a.evidence_ts}]" if a.evidence_ts else ""
+                md.append(f"- {a.action} (Resp: {a.owner}, Prazo: {a.deadline}){ev_s}")
+
+        return "\n".join(md)
+
     md: List[str] = [f"# ATA DE REUNIÃO: {m.title}\n"]
 
     md.append("## 1. Informações Gerais")
@@ -209,7 +305,7 @@ def minutes_to_markdown(m: MeetingMinutes) -> str:
 
 class MinutesGenerator:
     """
-    Gerador inteligente de atas de reunião executivas.
+    Gerador inteligente de atas de reunião executivas e resumos temáticos.
     Alterna de forma adaptativa entre chamada direta (para reuniões curtas)
     e Map-Reduce particionado (para reuniões longas de qualquer duração),
     respeitando estritamente o teto de 4GB de RAM via JSON Schema do Ollama.
@@ -225,11 +321,12 @@ class MinutesGenerator:
         meeting_date: Optional[str] = None,
         meeting_duration: Optional[str] = None,
         user_speaker_name: str = "Você",
+        output_format: str = OUTPUT_FORMAT_MINUTES,
         progress_callback: Optional[Callable[[str, int], None]] = None,
         token_callback: Optional[Callable[[str], None]] = None,
     ) -> Tuple[MeetingMinutes, str]:
         """
-        Gera a ata estruturada e retorna a tupla (MeetingMinutes, raw_markdown).
+        Gera a ata estruturada ou resumo temático e retorna a tupla (MeetingMinutes, raw_markdown).
         """
         chunks = partition_transcript(transcript_text, max_chunk_chars=10000)
 
@@ -241,6 +338,7 @@ class MinutesGenerator:
                 meeting_date=meeting_date,
                 meeting_duration=meeting_duration,
                 user_speaker_name=user_speaker_name,
+                output_format=output_format,
                 progress_callback=progress_callback,
                 token_callback=token_callback,
             )
@@ -252,6 +350,7 @@ class MinutesGenerator:
             meeting_date=meeting_date,
             meeting_duration=meeting_duration,
             user_speaker_name=user_speaker_name,
+            output_format=output_format,
             progress_callback=progress_callback,
             token_callback=token_callback,
         )
@@ -263,20 +362,34 @@ class MinutesGenerator:
         meeting_date: Optional[str],
         meeting_duration: Optional[str],
         user_speaker_name: str,
-        progress_callback: Optional[Callable[[str, int], None]],
-        token_callback: Optional[Callable[[str], None]],
+        output_format: str = OUTPUT_FORMAT_MINUTES,
+        progress_callback: Optional[Callable[[str, int], None]] = None,
+        token_callback: Optional[Callable[[str], None]] = None,
     ) -> Tuple[MeetingMinutes, str]:
         """Geração em chamada direta estruturada via JSON Schema com proteção anti-loop."""
+        is_theme = output_format == OUTPUT_FORMAT_THEME_SUMMARY
+        status_msg = "Gerando resumo temático via IA..." if is_theme else "Gerando ata executiva estruturada via IA..."
         if progress_callback:
-            progress_callback("Gerando ata executiva estruturada via IA...", 75)
+            progress_callback(status_msg, 75)
 
-        sys_p, usr_p = generate_structured_minutes_prompt(
-            transcript_text=transcript_text,
-            meeting_title=meeting_title,
-            meeting_date=meeting_date,
-            meeting_duration=meeting_duration,
-            user_speaker_name=user_speaker_name,
-        )
+        if is_theme:
+            sys_p, usr_p = generate_theme_summary_prompt(
+                transcript_text=transcript_text,
+                meeting_title=meeting_title,
+                meeting_date=meeting_date,
+                meeting_duration=meeting_duration,
+                user_speaker_name=user_speaker_name,
+            )
+            resp_schema = THEME_SUMMARY_SCHEMA
+        else:
+            sys_p, usr_p = generate_structured_minutes_prompt(
+                transcript_text=transcript_text,
+                meeting_title=meeting_title,
+                meeting_date=meeting_date,
+                meeting_duration=meeting_duration,
+                user_speaker_name=user_speaker_name,
+            )
+            resp_schema = MEETING_MINUTES_SCHEMA
 
         try:
             raw_response = self.client.generate(
@@ -284,7 +397,7 @@ class MinutesGenerator:
                 system=sys_p,
                 model=OLLAMA_MODEL,
                 keep_alive=OLLAMA_KEEP_ALIVE,
-                response_format=MEETING_MINUTES_SCHEMA,
+                response_format=resp_schema,
                 stream_callback=token_callback,
                 options={
                     "temperature": 0.2,
@@ -295,15 +408,17 @@ class MinutesGenerator:
             )
 
             data = json.loads(raw_response)
+            data["document_type"] = output_format
             minutes = MeetingMinutes.from_dict(data)
+            minutes.document_type = output_format
             if meeting_date and not minutes.date:
                 minutes.date = meeting_date
-            if meeting_title and minutes.title == "Ata de Reunião":
+            if meeting_title and minutes.title in ("Ata de Reunião", "Resumo de Temas"):
                 minutes.title = meeting_title
 
             markdown_output = minutes_to_markdown(minutes)
             minutes.raw_markdown = markdown_output
-            logger.info("Ata estruturada gerada com sucesso via JSON Schema (Single-pass).")
+            logger.info("Documento (%s) gerado com sucesso via JSON Schema (Single-pass).", output_format)
             return minutes, markdown_output
 
         except Exception as err:
@@ -313,6 +428,7 @@ class MinutesGenerator:
                 meeting_title=meeting_title,
                 meeting_date=meeting_date,
                 meeting_duration=meeting_duration,
+                output_format=output_format,
                 progress_callback=progress_callback,
                 token_callback=token_callback,
             )
@@ -324,12 +440,14 @@ class MinutesGenerator:
         meeting_date: Optional[str],
         meeting_duration: Optional[str],
         user_speaker_name: str,
-        progress_callback: Optional[Callable[[str, int], None]],
-        token_callback: Optional[Callable[[str], None]],
+        output_format: str = OUTPUT_FORMAT_MINUTES,
+        progress_callback: Optional[Callable[[str, int], None]] = None,
+        token_callback: Optional[Callable[[str], None]] = None,
     ) -> Tuple[MeetingMinutes, str]:
         """Geração escalável em duas etapas (Map sobre blocos -> Reduce consolidado)."""
         total = len(chunks)
-        logger.info("Iniciando Map-Reduce para reunião longa (%d blocos temporais)...", total)
+        is_theme = output_format == OUTPUT_FORMAT_THEME_SUMMARY
+        logger.info("Iniciando Map-Reduce para reunião longa (%d blocos, formato=%s)...", total, output_format)
 
         # ETAPA MAP: extrai notas estruturadas por bloco
         chunk_notes_list: List[Dict[str, Any]] = []
@@ -338,12 +456,22 @@ class MinutesGenerator:
             if progress_callback:
                 progress_callback(f"Analisando bloco {idx}/{total} da reunião com IA...", pct)
 
-            sys_p, usr_p = generate_map_chunk_prompt(
-                chunk_text=chunk,
-                chunk_index=idx,
-                total_chunks=total,
-                user_speaker_name=user_speaker_name,
-            )
+            if is_theme:
+                sys_p, usr_p = generate_theme_map_chunk_prompt(
+                    chunk_text=chunk,
+                    chunk_index=idx,
+                    total_chunks=total,
+                    user_speaker_name=user_speaker_name,
+                )
+                chunk_schema = THEME_CHUNK_NOTES_SCHEMA
+            else:
+                sys_p, usr_p = generate_map_chunk_prompt(
+                    chunk_text=chunk,
+                    chunk_index=idx,
+                    total_chunks=total,
+                    user_speaker_name=user_speaker_name,
+                )
+                chunk_schema = CHUNK_NOTES_SCHEMA
 
             try:
                 raw_chunk = self.client.generate(
@@ -351,7 +479,7 @@ class MinutesGenerator:
                     system=sys_p,
                     model=OLLAMA_MODEL,
                     keep_alive=OLLAMA_KEEP_ALIVE,
-                    response_format=CHUNK_NOTES_SCHEMA,
+                    response_format=chunk_schema,
                     options={
                         "temperature": 0.2,
                         "repeat_penalty": 1.15,
@@ -362,26 +490,35 @@ class MinutesGenerator:
                 chunk_data = json.loads(raw_chunk)
                 chunk_notes_list.append(chunk_data)
                 logger.info(
-                    "Bloco %d/%d processado: %d tópicos, %d decisões, %d ações.",
+                    "Bloco %d/%d processado: %d tópicos.",
                     idx,
                     total,
                     len(chunk_data.get("topics", [])),
-                    len(chunk_data.get("decisions", [])),
-                    len(chunk_data.get("action_items", [])),
                 )
             except Exception as e:
                 logger.warning("Erro ao processar bloco %d no Map (%s). Prosseguindo com os demais.", idx, e)
 
-        # ETAPA REDUCE: consolida todas as notas na ata definitiva
+        # ETAPA REDUCE: consolida todas as notas no documento definitivo
         if progress_callback:
-            progress_callback("Consolidando ata executiva e matriz de ações final...", 88)
+            red_msg = "Consolidando resumo de temas final..." if is_theme else "Consolidando ata executiva e matriz de ações final..."
+            progress_callback(red_msg, 88)
 
-        red_sys, red_usr = generate_reduce_prompt(
-            chunk_notes=chunk_notes_list,
-            meeting_date=meeting_date,
-            meeting_duration=meeting_duration,
-            user_speaker_name=user_speaker_name,
-        )
+        if is_theme:
+            red_sys, red_usr = generate_theme_reduce_prompt(
+                chunk_notes=chunk_notes_list,
+                meeting_date=meeting_date,
+                meeting_duration=meeting_duration,
+                user_speaker_name=user_speaker_name,
+            )
+            final_schema = THEME_SUMMARY_SCHEMA
+        else:
+            red_sys, red_usr = generate_reduce_prompt(
+                chunk_notes=chunk_notes_list,
+                meeting_date=meeting_date,
+                meeting_duration=meeting_duration,
+                user_speaker_name=user_speaker_name,
+            )
+            final_schema = MEETING_MINUTES_SCHEMA
 
         try:
             raw_final = self.client.generate(
@@ -389,7 +526,7 @@ class MinutesGenerator:
                 system=red_sys,
                 model=OLLAMA_MODEL,
                 keep_alive=OLLAMA_KEEP_ALIVE,
-                response_format=MEETING_MINUTES_SCHEMA,
+                response_format=final_schema,
                 stream_callback=token_callback,
                 options={
                     "temperature": 0.2,
@@ -400,15 +537,17 @@ class MinutesGenerator:
             )
 
             final_data = json.loads(raw_final)
+            final_data["document_type"] = output_format
             minutes = MeetingMinutes.from_dict(final_data)
+            minutes.document_type = output_format
             if meeting_date and not minutes.date:
                 minutes.date = meeting_date
-            if meeting_title and minutes.title == "Ata de Reunião":
+            if meeting_title and minutes.title in ("Ata de Reunião", "Resumo de Temas"):
                 minutes.title = meeting_title
 
             markdown_output = minutes_to_markdown(minutes)
             minutes.raw_markdown = markdown_output
-            logger.info("Map-Reduce finalizado com sucesso: '%s' gerada.", minutes.title)
+            logger.info("Map-Reduce finalizado com sucesso: '%s' gerada (%s).", minutes.title, output_format)
             return minutes, markdown_output
 
         except Exception as e:
@@ -418,6 +557,7 @@ class MinutesGenerator:
                 meeting_title=meeting_title,
                 meeting_date=meeting_date,
                 meeting_duration=meeting_duration,
+                output_format=output_format,
                 progress_callback=progress_callback,
                 token_callback=token_callback,
             )
@@ -428,19 +568,28 @@ class MinutesGenerator:
         meeting_title: Optional[str],
         meeting_date: Optional[str],
         meeting_duration: Optional[str],
-        progress_callback: Optional[Callable[[str, int], None]],
-        token_callback: Optional[Callable[[str], None]],
+        output_format: str = OUTPUT_FORMAT_MINUTES,
+        progress_callback: Optional[Callable[[str, int], None]] = None,
+        token_callback: Optional[Callable[[str], None]] = None,
     ) -> Tuple[MeetingMinutes, str]:
         """Geração clássica em texto Markdown com parsing resiliente via regex."""
         if progress_callback:
-            progress_callback("Gerando ata executiva em modo de compatibilidade...", 85)
+            progress_callback("Gerando documento em modo de compatibilidade...", 85)
 
-        sys_p, usr_p = generate_meeting_minutes_prompt(
-            transcript_text=transcript_text,
-            meeting_title=meeting_title,
-            meeting_date=meeting_date,
-            meeting_duration=meeting_duration,
-        )
+        if output_format == OUTPUT_FORMAT_THEME_SUMMARY:
+            sys_p, usr_p = generate_theme_summary_prompt(
+                transcript_text=transcript_text,
+                meeting_title=meeting_title,
+                meeting_date=meeting_date,
+                meeting_duration=meeting_duration,
+            )
+        else:
+            sys_p, usr_p = generate_meeting_minutes_prompt(
+                transcript_text=transcript_text,
+                meeting_title=meeting_title,
+                meeting_date=meeting_date,
+                meeting_duration=meeting_duration,
+            )
 
         raw_md = self.client.generate(
             prompt=usr_p,
@@ -450,4 +599,5 @@ class MinutesGenerator:
             stream_callback=token_callback,
         )
         parsed = MinutesParser.parse(raw_md)
+        parsed.document_type = output_format
         return parsed, raw_md

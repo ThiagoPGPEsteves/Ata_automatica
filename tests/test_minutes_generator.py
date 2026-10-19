@@ -198,10 +198,57 @@ Resumo em Markdown puro após falha de JSON.
     assert minutes.action_items[0].evidence_ts == "01:50"
 
 
+def test_single_pass_theme_summary():
+    """Valida a geração de resumo temático estruturado sem exigência de decisões ou tarefas."""
+    mock_client = MagicMock()
+    mock_client.is_available.return_value = True
+
+    sample_json = {
+        "title": "Mapeamento Estratégico de Riscos América Latina",
+        "date": "19/10/2026",
+        "participants": ["Thiago", "Sofia (Bogotá)"],
+        "executive_summary": "Reunião de alinhamento sobre as particularidades regulatórias e fiscais.",
+        "topics": [
+            {
+                "topic": "Exposição e Colaterais",
+                "details": "Discussão aprofundada sobre a segregação patrimonial e impacto das diretrizes locais."
+            },
+            {
+                "topic": "Sincronização Tecnológica",
+                "details": "Debate sobre links dedicados e conformidade com leis de privacidade de dados."
+            }
+        ],
+        "next_steps": ["Compartilhar ata de notas com os participantes"]
+    }
+
+    mock_client.generate.return_value = json.dumps(sample_json, ensure_ascii=False)
+
+    generator = MinutesGenerator(ollama_client=mock_client)
+    minutes, raw_md = generator.generate(
+        transcript_text="[00:01:00] [Thiago]: Iniciando nossa discussão sobre riscos...",
+        meeting_date="19/10/2026",
+        output_format="theme_summary",
+        user_speaker_name="Thiago",
+    )
+
+    assert isinstance(minutes, MeetingMinutes)
+    assert minutes.is_theme_summary is True
+    assert minutes.document_type == "theme_summary"
+    assert minutes.title == "Mapeamento Estratégico de Riscos América Latina"
+    assert len(minutes.topics) == 2
+    assert len(minutes.decisions) == 0
+    assert len(minutes.action_items) == 0
+    assert "# RESUMO DE TEMAS:" in raw_md
+    assert "## 3. Temas e Tópicos Discutidos" in raw_md
+    assert "## 5. Plano de Ação" not in raw_md
+    assert "| Ação / O Quê |" not in raw_md
+
+
 if __name__ == "__main__":
     test_partition_transcript_short()
     test_partition_transcript_long()
     test_single_pass_structured_json()
     test_map_reduce_long_meeting()
     test_generator_fallback_on_ollama_json_error()
+    test_single_pass_theme_summary()
     print("\nTODOS OS TESTES DO MINUTES GENERATOR FORAM APROVADOS COM SUCESSO!")

@@ -94,8 +94,32 @@ def create_fallback_minutes(
     meeting_duration_str: Optional[str] = None,
     user_speaker_name: str = "Você",
     reason: str = "O serviço local do Ollama não estava ativo no momento para síntese automática por IA.",
+    output_format: str = "minutes",
 ) -> MeetingMinutes:
-    """Gera uma minuta executiva estruturada de fallback quando o Ollama está indisponível."""
+    """Gera uma minuta executiva ou resumo temático de fallback quando o Ollama está indisponível."""
+    if output_format == "theme_summary":
+        raw_markdown = f"""# RESUMO DE TEMAS: Reunião Microsoft Teams
+
+## 1. Informações Gerais
+- Data: {meeting_date_str}
+- Duração: {meeting_duration_str or 'Não especificada'}
+- Plataforma: Microsoft Teams (Gravação Local)
+- Participantes: {user_speaker_name}, Participantes da Reunião
+
+## 2. Visão Geral da Discussão
+Reunião gravada e transcrita localmente com sucesso. {reason} O diálogo integral com os temas discutidos está preservado na transcrição completa.
+
+## 3. Temas e Tópicos Discutidos
+### Diálogo da Reunião
+Consulte o conteúdo completo da conversa na aba de transcrição para revisar as discussões abordadas.
+
+## 4. Destaques e Observações Relevantes
+- Inicie o Ollama com 'ollama run {OLLAMA_MODEL}' para sínteses temáticas automáticas por IA.
+"""
+        parsed = MinutesParser.parse(raw_markdown)
+        parsed.document_type = "theme_summary"
+        return parsed
+
     raw_markdown = f"""# ATA DE REUNIÃO: Reunião Microsoft Teams
 
 ## 1. Informações Gerais
@@ -318,12 +342,13 @@ class MeetingPipeline:
         preferred_model = self.settings.model_profile
         corporate_glossary = self.settings.corporate_glossary
         user_speaker_name = self.settings.user_speaker_name
+        transcription_lang = getattr(self.settings, "transcription_language", "auto")
 
         # Fase P4: Skip de Silêncio / VAD Inteligente
         mic_has_voice = has_speech_activity(mic_wav)
         teams_has_voice = has_speech_activity(teams_wav)
 
-        with WhisperEngine(model_size=preferred_model) as engine:
+        with WhisperEngine(model_size=preferred_model, language=transcription_lang) as engine:
             if mic_has_voice:
                 self._emit_progress(
                     f"Transcrevendo canal de voz ({user_speaker_name}) com Whisper '{engine.model_size}'...",
@@ -409,7 +434,7 @@ class MeetingPipeline:
 
     def run_generation(self, transcript_text: Optional[str] = None) -> MeetingMinutes:
         """
-        Executa a síntese da ata executiva via Ollama ou fallback seguro.
+        Executa a síntese da ata executiva ou resumo de temas via Ollama ou fallback seguro.
         Persiste o resultado em session.minutes_path.
         """
         if not transcript_text:
@@ -417,6 +442,7 @@ class MeetingPipeline:
 
         meeting_date_str, meeting_duration_str = extract_audio_metadata(self.session.audio_path)
         user_speaker_name = self.settings.user_speaker_name
+        output_format = getattr(self.settings, "output_format", "minutes")
 
         auditor = SystemMemoryAuditor()
         auditor.log_memory_checkpoint("Pré-Geração Ollama")
@@ -424,15 +450,17 @@ class MeetingPipeline:
         client = OllamaClient()
 
         if not client.is_available():
-            logger.warning("Ollama offline em localhost:11434. Gerando ata de fallback estruturada.")
-            self._emit_progress("Ollama offline. Gerando minuta com transcrição preservada...", 85)
+            logger.warning("Ollama offline em localhost:11434. Gerando documento de fallback estruturado.")
+            self._emit_progress("Ollama offline. Gerando documento com transcrição preservada...", 85)
             minutes_obj = create_fallback_minutes(
                 meeting_date_str=meeting_date_str,
                 meeting_duration_str=meeting_duration_str,
                 user_speaker_name=user_speaker_name,
+                output_format=output_format,
             )
         else:
-            self._emit_progress("Iniciando síntese inteligente da ata com IA...", 70)
+            gen_label = "resumo temático" if output_format == "theme_summary" else "ata executiva"
+            self._emit_progress(f"Iniciando síntese inteligente ({gen_label}) com IA...", 70)
             generator = MinutesGenerator(ollama_client=client)
             try:
                 minutes_obj, _ = generator.generate(
@@ -440,18 +468,20 @@ class MeetingPipeline:
                     meeting_date=meeting_date_str,
                     meeting_duration=meeting_duration_str,
                     user_speaker_name=user_speaker_name,
+                    output_format=output_format,
                     progress_callback=self._emit_progress,
                     token_callback=self._emit_chunk,
                 )
             except Exception as ollama_err:
                 logger.warning(
-                    "Falha na comunicação com Ollama (%s). Usando minuta de fallback estruturada.",
+                    "Falha na comunicação com Ollama (%s). Usando documento de fallback estruturado.",
                     ollama_err,
                 )
                 minutes_obj = create_fallback_minutes(
                     meeting_date_str=meeting_date_str,
                     meeting_duration_str=meeting_duration_str,
                     user_speaker_name=user_speaker_name,
+                    output_format=output_format,
                     reason=f"Ollama retornou erro durante síntese ({ollama_err}).",
                 )
 

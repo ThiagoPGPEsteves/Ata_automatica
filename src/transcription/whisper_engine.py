@@ -249,9 +249,11 @@ class WhisperEngine:
 
         glossary_hotwords = hotwords or initial_prompt or DEFAULT_CORPORATE_GLOSSARY
 
+        whisper_lang = None if (not self.language or str(self.language).lower() in ("auto", "none", "")) else self.language
+
         segments_generator, info = self._model.transcribe(
             processed_audio,
-            language=self.language,
+            language=whisper_lang,
             beam_size=beam_size,
             vad_filter=vad_filter,
             vad_parameters=dict(min_silence_duration_ms=400),

@@ -166,10 +166,61 @@ Aplicação de paleta azul marinho nas colunas.
     print("  -> TESTE 3 APROVADO: Fluxo integrado concluído com perfeição!")
 
 
+def test_docx_theme_summary_generation():
+    """Valida a exportação de um Resumo Temático sem deliberações ou tabela de ações."""
+    print("\n[TESTE 4] Validando Exportação DOCX de Resumo Temático...")
+    theme_minutes = MeetingMinutes(
+        title="Debate sobre Inteligência Artificial e Governança",
+        date="19/10/2026",
+        participants=["Thiago", "Sofia", "Carlos"],
+        executive_summary="Visão geral e contextualização dos debates sobre o uso ético de LLMs locais.",
+        topics=[
+            {
+                "topic": "Soberania de Dados",
+                "details": "Avaliação de privacidade total com modelos locais sem envio de áudio para nuvem externa."
+            },
+            {
+                "topic": "Latência e Desempenho",
+                "details": "Métricas de tempo de resposta em CPU mantendo consumo estritamente abaixo de 4GB de RAM."
+            }
+        ],
+        decisions=[],
+        action_items=[],
+        next_steps=["Acompanhar publicação do novo framework regulatório."],
+        document_type="theme_summary",
+    )
+
+    out_file = OUTPUT_DIR / "test_resumo_temas.docx"
+    builder = DocxMeetingMinutesBuilder()
+    saved = builder.build(theme_minutes, out_file)
+
+    assert saved.exists()
+    doc = docx.Document(str(saved))
+
+    paragraphs_text = [p.text for p in doc.paragraphs if p.text.strip()]
+    full_text = " ".join(paragraphs_text)
+
+    assert "RESUMO EXECUTIVO DE TEMAS" in full_text
+    assert "Debate sobre Inteligência Artificial" in full_text
+    assert "1. Visão Geral da Discussão" in full_text
+    assert "2. Temas e Tópicos Discutidos" in full_text
+    assert "3. Destaques e Observações Relevantes" in full_text
+    # Garante que NÃO há cabeçalhos de decisões ou plano de ação vazios
+    assert "Plano de Ação" not in full_text
+    assert "Decisões Tomadas" not in full_text
+
+    # Deve conter APENAS 1 tabela (o card de metadados). Nenhuma tabela de ações vazia!
+    assert len(doc.tables) == 1
+    meta_table_text = " ".join([cell.text for row in doc.tables[0].rows for cell in row.cells])
+    assert "Resumo Temático de Discussões" in meta_table_text
+    print("  -> TESTE 4 APROVADO: Resumo Temático gerado no Word com layout limpo e sem tabelas vazias!")
+
+
 if __name__ == "__main__":
     test_docx_generation_from_model()
     test_docx_document_integrity()
     test_markdown_to_docx_pipeline()
+    test_docx_theme_summary_generation()
     print("\n==========================================")
     print("TODOS OS TESTES DA FASE 4 FORAM CONCLUÍDOS!")
     print("==========================================")

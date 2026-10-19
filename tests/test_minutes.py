@@ -156,10 +156,69 @@ def test_ollama_client_compliance():
     print("  -> TESTE 3 APROVADO: Diretiva de descarregamento imediato 'keep_alive': '0s' comprovada!")
 
 
+def test_theme_summary_prompt_and_multilingual_context():
+    """Valida o prompt de resumo de temas e a inclusão do contexto multilíngue (Espanhol e Português)."""
+    from src.minutes.prompts import generate_theme_summary_prompt
+
+    bilingual_transcript = (
+        "[00:00 - 00:05] [Você]: Bom dia a todos, hoje vamos alinhar os temas da operação internacional.\n"
+        "[00:06 - 00:15] [Participantes da Reunião]: Buenos días Thiago. Desde Colombia queremos revisar los nuevos límites de exposición y la regulación de contrapartes.\n"
+        "[00:16 - 00:25] [Você]: Perfeito, vamos analisar os impactos operacionais para ambos os países."
+    )
+
+    sys_p, usr_p = generate_theme_summary_prompt(
+        transcript_text=bilingual_transcript,
+        meeting_title="Alinhamento Colômbia e Brasil",
+        meeting_date="19/10/2026",
+    )
+
+    assert "RESUMO EXECUTIVO DOS TEMAS DISCUTIDOS" in sys_p
+    assert "Espanhol" in sys_p and "Português" in sys_p
+    assert "NÃO invente decisões" in sys_p or "SEM OBRIGATORIEDADE DE DECISÕES" in sys_p
+    assert "Alinhamento Colômbia e Brasil" in usr_p
+    assert "Buenos días Thiago" in usr_p
+
+
+def test_theme_summary_markdown_parsing():
+    """Valida o parser ao receber um resumo temático sem decisões nem matriz de ações."""
+    sample_theme_md = """# RESUMO DE TEMAS: Discussão sobre Expansão Regional
+
+## 1. Informações Gerais
+- Data: 19/10/2026
+- Participantes: Thiago Esteves, Carlos Mendoza (Colômbia)
+
+## 2. Visão Geral da Discussão
+Reunião exploratória para analisar os desafios regulatórios e fiscais da operação na América Latina.
+
+## 3. Temas e Tópicos Discutidos
+### Regulação Cambial
+Debate sobre exigências do banco central local e liquidação financeira.
+### Integração de Sistemas
+Avaliação de arquiteturas distribuídas e latência de rede entre Bogotá e São Paulo.
+
+## 4. Destaques e Observações Relevantes
+- O prazo regulatório preliminar é de 6 meses.
+- O volume estimado é de 50 mil transações/dia.
+"""
+
+    minutes = MinutesParser.parse(sample_theme_md)
+
+    assert minutes.is_theme_summary is True
+    assert minutes.document_type == "theme_summary"
+    assert minutes.title == "Discussão sobre Expansão Regional"
+    assert "19/10/2026" in minutes.date
+    assert len(minutes.topics) == 2
+    assert len(minutes.decisions) == 0
+    assert len(minutes.action_items) == 0
+    assert len(minutes.next_steps) == 2
+
+
 if __name__ == "__main__":
     test_prompts_generation()
     test_minutes_parser()
     test_ollama_client_compliance()
+    test_theme_summary_prompt_and_multilingual_context()
+    test_theme_summary_markdown_parsing()
     print("\n==========================================")
     print("TODOS OS TESTES DA FASE 3 FORAM CONCLUÍDOS!")
     print("==========================================")

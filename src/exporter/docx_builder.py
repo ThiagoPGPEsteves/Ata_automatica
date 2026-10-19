@@ -72,66 +72,134 @@ class DocxMeetingMinutesBuilder:
         # 3. Metadados da Reunião (Data, Participantes)
         self._add_metadata_card(doc, minutes)
 
-        # 4. Resumo Executivo
-        if minutes.executive_summary:
-            self._add_section_header(doc, "1. Resumo Executivo")
-            para = doc.add_paragraph()
-            para.paragraph_format.line_spacing = 1.15
-            para.paragraph_format.space_after = Pt(10)
-            run = para.add_run(minutes.executive_summary)
-            run.font.name = DocumentStyles.FONT_FAMILY
-            run.font.size = DocumentStyles.BODY_SIZE
-            run.font.color.rgb = CorporatePalette.TEXT_DARK
+        if minutes.is_theme_summary:
+            # Modo Resumo Temático
+            sec_idx = 1
+            # 4. Visão Geral
+            if minutes.executive_summary:
+                self._add_section_header(doc, f"{sec_idx}. Visão Geral da Discussão")
+                sec_idx += 1
+                para = doc.add_paragraph()
+                para.paragraph_format.line_spacing = 1.15
+                para.paragraph_format.space_after = Pt(10)
+                run = para.add_run(minutes.executive_summary)
+                run.font.name = DocumentStyles.FONT_FAMILY
+                run.font.size = DocumentStyles.BODY_SIZE
+                run.font.color.rgb = CorporatePalette.TEXT_DARK
 
-        # 5. Pautas e Discussões
-        if minutes.topics:
-            self._add_section_header(doc, "2. Pautas e Discussões")
-            for t in minutes.topics:
-                # Subtítulo da pauta
-                p_topic = doc.add_paragraph()
-                p_topic.paragraph_format.space_before = Pt(6)
-                p_topic.paragraph_format.space_after = Pt(3)
-                r_topic = p_topic.add_run(f"▸ {t.get('topic', 'Pauta')}")
-                r_topic.bold = True
-                r_topic.font.name = DocumentStyles.FONT_FAMILY
-                r_topic.font.size = DocumentStyles.SUBSECTION_SIZE
-                r_topic.font.color.rgb = CorporatePalette.STEEL_BLUE
+            # 5. Temas e Tópicos Discutidos
+            if minutes.topics:
+                self._add_section_header(doc, f"{sec_idx}. Temas e Tópicos Discutidos")
+                sec_idx += 1
+                for t in minutes.topics:
+                    p_topic = doc.add_paragraph()
+                    p_topic.paragraph_format.space_before = Pt(6)
+                    p_topic.paragraph_format.space_after = Pt(3)
+                    r_topic = p_topic.add_run(f"▸ {t.get('topic', 'Tema')}")
+                    r_topic.bold = True
+                    r_topic.font.name = DocumentStyles.FONT_FAMILY
+                    r_topic.font.size = DocumentStyles.SUBSECTION_SIZE
+                    r_topic.font.color.rgb = CorporatePalette.STEEL_BLUE
 
-                # Detalhes da pauta
-                if t.get("details"):
-                    p_det = doc.add_paragraph()
-                    p_det.paragraph_format.left_indent = Inches(0.2)
-                    p_det.paragraph_format.line_spacing = 1.15
-                    p_det.paragraph_format.space_after = Pt(6)
-                    r_det = p_det.add_run(t["details"])
-                    r_det.font.name = DocumentStyles.FONT_FAMILY
-                    r_det.font.size = DocumentStyles.BODY_SIZE
-                    r_det.font.color.rgb = CorporatePalette.TEXT_DARK
+                    if t.get("details"):
+                        p_det = doc.add_paragraph()
+                        p_det.paragraph_format.left_indent = Inches(0.2)
+                        p_det.paragraph_format.line_spacing = 1.15
+                        p_det.paragraph_format.space_after = Pt(6)
+                        r_det = p_det.add_run(t["details"])
+                        r_det.font.name = DocumentStyles.FONT_FAMILY
+                        r_det.font.size = DocumentStyles.BODY_SIZE
+                        r_det.font.color.rgb = CorporatePalette.TEXT_DARK
 
-        # 6. Decisões Tomadas (Caixa de Destaque / Callout Box)
-        if minutes.decisions:
-            self._add_section_header(doc, "3. Decisões Tomadas e Deliberações")
-            self._add_decisions_callout(doc, minutes.decisions)
+            # 6. Destaques e Observações
+            if minutes.next_steps:
+                self._add_section_header(doc, f"{sec_idx}. Destaques e Observações Relevantes")
+                sec_idx += 1
+                for step in minutes.next_steps:
+                    p_step = doc.add_paragraph()
+                    p_step.paragraph_format.left_indent = Inches(0.15)
+                    p_step.paragraph_format.space_after = Pt(4)
+                    r_bullet = p_step.add_run("▪ ")
+                    r_bullet.bold = True
+                    r_bullet.font.color.rgb = CorporatePalette.STEEL_BLUE
+                    r_text = p_step.add_run(step)
+                    r_text.font.name = DocumentStyles.FONT_FAMILY
+                    r_text.font.size = DocumentStyles.BODY_SIZE
+                    r_text.font.color.rgb = CorporatePalette.TEXT_DARK
 
-        # 7. Plano de Ação (Tabela Zebrada Corporativa)
-        if minutes.action_items:
-            self._add_section_header(doc, "4. Plano de Ação (Matriz de Responsabilidades)")
-            self._add_action_items_table(doc, minutes.action_items)
+            # Deliberações e Ações (apenas se existirem explicitamente no resumo)
+            if minutes.decisions:
+                self._add_section_header(doc, f"{sec_idx}. Deliberações Mencionadas")
+                sec_idx += 1
+                self._add_decisions_callout(doc, minutes.decisions)
 
-        # 8. Próximos Passos e Pendências
-        if minutes.next_steps:
-            self._add_section_header(doc, "5. Próximos Passos e Encaminhamentos")
-            for step in minutes.next_steps:
-                p_step = doc.add_paragraph()
-                p_step.paragraph_format.left_indent = Inches(0.15)
-                p_step.paragraph_format.space_after = Pt(4)
-                r_bullet = p_step.add_run("▪ ")
-                r_bullet.bold = True
-                r_bullet.font.color.rgb = CorporatePalette.STEEL_BLUE
-                r_text = p_step.add_run(step)
-                r_text.font.name = DocumentStyles.FONT_FAMILY
-                r_text.font.size = DocumentStyles.BODY_SIZE
-                r_text.font.color.rgb = CorporatePalette.TEXT_DARK
+            if minutes.action_items:
+                self._add_section_header(doc, f"{sec_idx}. Ações Mencionadas")
+                sec_idx += 1
+                self._add_action_items_table(doc, minutes.action_items)
+
+        else:
+            # Modo Ata Executiva Padrão
+            # 4. Resumo Executivo
+            if minutes.executive_summary:
+                self._add_section_header(doc, "1. Resumo Executivo")
+                para = doc.add_paragraph()
+                para.paragraph_format.line_spacing = 1.15
+                para.paragraph_format.space_after = Pt(10)
+                run = para.add_run(minutes.executive_summary)
+                run.font.name = DocumentStyles.FONT_FAMILY
+                run.font.size = DocumentStyles.BODY_SIZE
+                run.font.color.rgb = CorporatePalette.TEXT_DARK
+
+            # 5. Pautas e Discussões
+            if minutes.topics:
+                self._add_section_header(doc, "2. Pautas e Discussões")
+                for t in minutes.topics:
+                    # Subtítulo da pauta
+                    p_topic = doc.add_paragraph()
+                    p_topic.paragraph_format.space_before = Pt(6)
+                    p_topic.paragraph_format.space_after = Pt(3)
+                    r_topic = p_topic.add_run(f"▸ {t.get('topic', 'Pauta')}")
+                    r_topic.bold = True
+                    r_topic.font.name = DocumentStyles.FONT_FAMILY
+                    r_topic.font.size = DocumentStyles.SUBSECTION_SIZE
+                    r_topic.font.color.rgb = CorporatePalette.STEEL_BLUE
+
+                    # Detalhes da pauta
+                    if t.get("details"):
+                        p_det = doc.add_paragraph()
+                        p_det.paragraph_format.left_indent = Inches(0.2)
+                        p_det.paragraph_format.line_spacing = 1.15
+                        p_det.paragraph_format.space_after = Pt(6)
+                        r_det = p_det.add_run(t["details"])
+                        r_det.font.name = DocumentStyles.FONT_FAMILY
+                        r_det.font.size = DocumentStyles.BODY_SIZE
+                        r_det.font.color.rgb = CorporatePalette.TEXT_DARK
+
+            # 6. Decisões Tomadas (Caixa de Destaque / Callout Box)
+            if minutes.decisions:
+                self._add_section_header(doc, "3. Decisões Tomadas e Deliberações")
+                self._add_decisions_callout(doc, minutes.decisions)
+
+            # 7. Plano de Ação (Tabela Zebrada Corporativa)
+            if minutes.action_items:
+                self._add_section_header(doc, "4. Plano de Ação (Matriz de Responsabilidades)")
+                self._add_action_items_table(doc, minutes.action_items)
+
+            # 8. Próximos Passos e Pendências
+            if minutes.next_steps:
+                self._add_section_header(doc, "5. Próximos Passos e Encaminhamentos")
+                for step in minutes.next_steps:
+                    p_step = doc.add_paragraph()
+                    p_step.paragraph_format.left_indent = Inches(0.15)
+                    p_step.paragraph_format.space_after = Pt(4)
+                    r_bullet = p_step.add_run("▪ ")
+                    r_bullet.bold = True
+                    r_bullet.font.color.rgb = CorporatePalette.STEEL_BLUE
+                    r_text = p_step.add_run(step)
+                    r_text.font.name = DocumentStyles.FONT_FAMILY
+                    r_text.font.size = DocumentStyles.BODY_SIZE
+                    r_text.font.color.rgb = CorporatePalette.TEXT_DARK
 
         doc.save(str(out_path))
         logger.info("Documento Word (.docx) gerado com sucesso: %s", out_path)
@@ -149,13 +217,15 @@ class DocxMeetingMinutesBuilder:
 
         p_title = doc.add_paragraph()
         p_title.paragraph_format.space_after = Pt(4)
-        r_title = p_title.add_run("ATA DE REUNIÃO EXECUTIVA")
+        doc_header = "RESUMO EXECUTIVO DE TEMAS" if minutes.is_theme_summary else "ATA DE REUNIÃO EXECUTIVA"
+        r_title = p_title.add_run(doc_header)
         r_title.font.name = DocumentStyles.FONT_FAMILY
         r_title.font.size = DocumentStyles.TITLE_SIZE
         r_title.bold = True
         r_title.font.color.rgb = CorporatePalette.NAVY
 
-        if minutes.title and minutes.title != "Ata de Reunião":
+        default_names = ("Ata de Reunião", "Resumo de Temas")
+        if minutes.title and minutes.title not in default_names:
             p_sub = doc.add_paragraph()
             p_sub.paragraph_format.space_after = Pt(12)
             r_sub = p_sub.add_run(minutes.title)
@@ -171,12 +241,14 @@ class DocxMeetingMinutesBuilder:
 
         date_val = minutes.date or datetime.now().strftime("%d/%m/%Y")
         participants_val = ", ".join(minutes.participants) if minutes.participants else "Identificados por canal (Você / Equipe)"
+        status_label = "TIPO DE DOCUMENTO" if minutes.is_theme_summary else "SITUAÇÃO DA ATA"
+        status_val = "Resumo Temático de Discussões" if minutes.is_theme_summary else "Aprovada para Distribuição"
 
         meta_items = [
             ("DATA DA REUNIÃO", date_val),
             ("PLATAFORMA", "Microsoft Teams (Gravação Dual-Channel)"),
             ("PARTICIPANTES", participants_val),
-            ("SITUAÇÃO DA ATA", "Aprovada para Distribuição"),
+            (status_label, status_val),
         ]
 
         idx = 0

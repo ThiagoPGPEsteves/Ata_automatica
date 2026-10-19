@@ -49,7 +49,8 @@ class AudioSettingsDialog(QDialog):
     ):
         super().__init__(parent)
         self.setWindowTitle("Configuração de Áudio & Motor de Transcrição")
-        self.setFixedSize(580, 580)
+        self.resize(580, 660)
+        self.setMinimumSize(550, 600)
 
         # Carrega configurações salvas do usuário
         self.saved_settings = get_user_settings()
@@ -153,7 +154,7 @@ class AudioSettingsDialog(QDialog):
         layout.addWidget(lbl_title)
 
         lbl_desc = QLabel(
-            "Personalize a captura de áudio, a qualidade do Whisper e os termos da sua empresa.",
+            "Personalize a captura de áudio, formato padrão, qualidade do Whisper e termos da sua empresa.",
             self,
         )
         lbl_desc.setStyleSheet("color: #94A3B8; font-size: 11px; font-weight: normal;")
@@ -164,6 +165,21 @@ class AudioSettingsDialog(QDialog):
         self.txt_user_name = QLineEdit(self)
         self.txt_user_name.setPlaceholderText("Ex: Thiago Esteves (ou seu primeiro nome)")
         layout.addWidget(self.txt_user_name)
+
+        # 0.1 Formato Padrão do Documento
+        layout.addWidget(QLabel("FORMATO PADRÃO DO DOCUMENTO:", self))
+        self.combo_format = QComboBox(self)
+        self.combo_format.addItem("📄 Ata Executiva Completa (com Decisões e Ações)", "minutes")
+        self.combo_format.addItem("📝 Resumo dos Temas Discutidos (Informativo / Sem Ações)", "theme_summary")
+        layout.addWidget(self.combo_format)
+
+        # 0.2 Idioma da Reunião / Transcrição
+        layout.addWidget(QLabel("IDIOMA DA REUNIÃO (TRANSCRIÇÃO WHISPER):", self))
+        self.combo_language = QComboBox(self)
+        self.combo_language.addItem("🌐 Automático / Multilíngue (Detecta Português e Espanhol)", "auto")
+        self.combo_language.addItem("🇧🇷 Português (pt-BR)", "pt")
+        self.combo_language.addItem("🇪🇸 Espanhol (es)", "es")
+        layout.addWidget(self.combo_language)
 
         # 1. Microfone do Usuário
         layout.addWidget(QLabel("MICROFONE (SUA VOZ / CANAL 0):", self))
@@ -278,11 +294,23 @@ class AudioSettingsDialog(QDialog):
             self.combo_loopback.setCurrentIndex(selected_loop_idx)
 
     def _load_transcription_settings(self):
-        """Carrega perfil do modelo e glossário nas entradas visuais."""
+        """Carrega perfil do modelo, formato, idioma e glossário nas entradas visuais."""
         current_profile = self.saved_settings.get("model_profile", "auto")
         for i in range(self.combo_model.count()):
             if self.combo_model.itemData(i) == current_profile:
                 self.combo_model.setCurrentIndex(i)
+                break
+
+        current_format = self.saved_settings.get("output_format", "minutes")
+        for i in range(self.combo_format.count()):
+            if self.combo_format.itemData(i) == current_format:
+                self.combo_format.setCurrentIndex(i)
+                break
+
+        current_lang = self.saved_settings.get("transcription_language", "auto")
+        for i in range(self.combo_language.count()):
+            if self.combo_language.itemData(i) == current_lang:
+                self.combo_language.setCurrentIndex(i)
                 break
 
         glossary_text = self.saved_settings.get("corporate_glossary", DEFAULT_CORPORATE_GLOSSARY)
@@ -296,6 +324,8 @@ class AudioSettingsDialog(QDialog):
         mic_id = self.combo_mic.currentData()
         loop_id = self.combo_loopback.currentData()
         model_profile = self.combo_model.currentData() or "auto"
+        output_format = self.combo_format.currentData() or "minutes"
+        transcription_lang = self.combo_language.currentData() or "auto"
         glossary_text = self.txt_glossary.toPlainText().strip() or DEFAULT_CORPORATE_GLOSSARY
 
         if mic_id is not None:
@@ -324,6 +354,8 @@ class AudioSettingsDialog(QDialog):
             "loopback_device_id": self.current_loopback_id,
             "loopback_device_name": loop_name,
             "model_profile": model_profile,
+            "output_format": output_format,
+            "transcription_language": transcription_lang,
             "corporate_glossary": glossary_text,
             "user_speaker_name": user_name,
         })

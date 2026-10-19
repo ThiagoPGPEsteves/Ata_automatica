@@ -21,6 +21,7 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QTabWidget,
     QWidget,
+    QComboBox,
     QTableWidget,
     QTableWidgetItem,
     QHeaderView,
@@ -185,10 +186,25 @@ class ReviewDialog(QDialog):
         # 2. Navegador por Abas
         self.tabs = QTabWidget(self)
 
-        # Aba 1: Editor da Ata Executiva
+        # Aba 1: Editor da Ata Executiva / Resumo
         tab_minutes = QWidget()
         t1_layout = QVBoxLayout(tab_minutes)
         t1_layout.setSpacing(10)
+
+        # Barra de seleção de formato do documento
+        format_layout = QHBoxLayout()
+        format_layout.setSpacing(8)
+        lbl_format = QLabel("FORMATO DO DOCUMENTO:")
+        lbl_format.setStyleSheet("color: #38BDF8; font-weight: bold;")
+        format_layout.addWidget(lbl_format)
+
+        self.combo_format = QComboBox(tab_minutes)
+        self.combo_format.addItem("📄 Ata Executiva Completa (com Decisões e Plano de Ação)", "minutes")
+        self.combo_format.addItem("📝 Resumo dos Temas Discutidos (Informativo / Sem Ações)", "theme_summary")
+        self.combo_format.currentIndexChanged.connect(self._on_format_changed)
+        format_layout.addWidget(self.combo_format, 1)
+        format_layout.addStretch()
+        t1_layout.addLayout(format_layout)
 
         # Metadados rápidos
         meta_layout = QHBoxLayout()
@@ -217,21 +233,24 @@ class ReviewDialog(QDialog):
 
         t1_layout.addLayout(meta_layout)
 
-        # Resumo Executivo
-        t1_layout.addWidget(QLabel("1. RESUMO EXECUTIVO"))
+        # Resumo Executivo / Visão Geral
+        self.lbl_sec_summary = QLabel("1. RESUMO EXECUTIVO")
+        t1_layout.addWidget(self.lbl_sec_summary)
         self.txt_summary = QTextEdit()
         self.txt_summary.setFixedHeight(70)
         t1_layout.addWidget(self.txt_summary)
 
         # Decisões Tomadas
-        t1_layout.addWidget(QLabel("2. DECISÕES TOMADAS (UMA POR LINHA)"))
+        self.lbl_sec_decisions = QLabel("2. DECISÕES TOMADAS (UMA POR LINHA)")
+        t1_layout.addWidget(self.lbl_sec_decisions)
         self.txt_decisions = QTextEdit()
         self.txt_decisions.setFixedHeight(65)
         t1_layout.addWidget(self.txt_decisions)
 
         # Matriz de Ações (Tabela Interativa)
         actions_header_layout = QHBoxLayout()
-        actions_header_layout.addWidget(QLabel("3. PLANO DE AÇÃO E RESPONSABILIDADES"))
+        self.lbl_sec_actions = QLabel("3. PLANO DE AÇÃO E RESPONSABILIDADES")
+        actions_header_layout.addWidget(self.lbl_sec_actions)
         actions_header_layout.addStretch()
 
         self.btn_add_action = QPushButton("+ Adicionar Ação", tab_minutes)
@@ -322,12 +341,38 @@ class ReviewDialog(QDialog):
         self.txt_streaming.moveCursor(self.txt_streaming.textCursor().MoveOperation.End)
         self.txt_streaming.insertPlainText(token)
 
+    def _on_format_changed(self):
+        """Atualiza a nomenclatura e elementos da interface conforme o formato selecionado."""
+        is_theme = (self.combo_format.currentData() == "theme_summary")
+        if is_theme:
+            self.lbl_sec_summary.setText("1. VISÃO GERAL DA DISCUSSÃO")
+            self.lbl_sec_decisions.setText("2. DELIBERAÇÕES MENCIONADAS (OPCIONAL NO RESUMO)")
+            self.lbl_sec_actions.setText("3. AÇÕES MENCIONADAS (OPCIONAL NO RESUMO)")
+            self.tabs.setTabText(0, "📝 Resumo de Temas")
+            self.setWindowTitle("Revisão do Resumo Temático - Microsoft Teams")
+            self.btn_export.setText("💾 Exportar Resumo para Word (.docx)")
+        else:
+            self.lbl_sec_summary.setText("1. RESUMO EXECUTIVO")
+            self.lbl_sec_decisions.setText("2. DECISÕES TOMADAS (UMA POR LINHA)")
+            self.lbl_sec_actions.setText("3. PLANO DE AÇÃO E RESPONSABILIDADES")
+            self.tabs.setTabText(0, "📄 Ata Executiva")
+            self.setWindowTitle("Revisão da Ata Executiva - Microsoft Teams")
+            self.btn_export.setText("💾 Exportar para Microsoft Word (.docx)")
+
     def load_minutes(self, minutes: MeetingMinutes, transcript_text: str):
-        """Preenche todos os campos com os dados estruturados da ata."""
+        """Preenche todos os campos com os dados estruturados da ata ou resumo."""
         self.current_minutes = minutes
         self.transcript_text = transcript_text
 
-        self.txt_title.setText(minutes.title or "Ata de Reunião Executiva")
+        # Atualiza o combo de formato
+        doc_type = getattr(minutes, "document_type", "minutes")
+        idx = self.combo_format.findData(doc_type)
+        if idx >= 0:
+            self.combo_format.setCurrentIndex(idx)
+        self._on_format_changed()
+
+        default_title = "Resumo dos Temas Discutidos" if minutes.is_theme_summary else "Ata de Reunião Executiva"
+        self.txt_title.setText(minutes.title or default_title)
         self.txt_date.setText(minutes.date or datetime.now().strftime("%d/%m/%Y"))
         self.txt_participants.setText(", ".join(minutes.participants) if minutes.participants else "")
         self.txt_summary.setPlainText(minutes.executive_summary)
@@ -385,6 +430,9 @@ class ReviewDialog(QDialog):
 
     def _collect_edited_minutes(self) -> MeetingMinutes:
         """Coleta os dados editados pelo usuário na interface e retorna um MeetingMinutes atualizado."""
+        doc_type = self.combo_format.currentData() or "minutes"
+        default_title = "Resumo dos Temas Discutidos" if doc_type == "theme_summary" else "Ata de Reunião Executiva"
+
         # Participantes
         raw_parts = self.txt_participants.text().split(",")
         participants = [p.strip() for p in raw_parts if p.strip()]
@@ -413,7 +461,7 @@ class ReviewDialog(QDialog):
         next_steps = self.current_minutes.next_steps if self.current_minutes else []
 
         return MeetingMinutes(
-            title=self.txt_title.text().strip() or "Ata de Reunião Executiva",
+            title=self.txt_title.text().strip() or default_title,
             date=self.txt_date.text().strip() or datetime.now().strftime("%d/%m/%Y"),
             participants=participants,
             executive_summary=self.txt_summary.toPlainText().strip(),
@@ -421,17 +469,24 @@ class ReviewDialog(QDialog):
             decisions=decisions,
             action_items=action_items,
             next_steps=next_steps,
+            document_type=doc_type,
         )
 
     def _export_to_docx(self):
         """Gera o documento Word oficial com os dados da interface."""
         minutes_to_export = self._collect_edited_minutes()
 
-        if not minutes_to_export.executive_summary.strip() and not minutes_to_export.decisions:
+        has_content = bool(
+            minutes_to_export.executive_summary.strip()
+            or minutes_to_export.topics
+            or minutes_to_export.decisions
+        )
+
+        if not has_content:
             reply = QMessageBox.question(
                 self,
-                "Ata sem Conteúdo",
-                "A ata ainda não possui Resumo Executivo ou Decisões preenchidas.\n\n"
+                "Documento sem Conteúdo",
+                "O documento ainda não possui Resumo ou Tópicos preenchidos.\n\n"
                 "Deseja gerar o conteúdo agora utilizando a IA local (Ollama)?",
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No | QMessageBox.StandardButton.Cancel,
                 QMessageBox.StandardButton.Yes,
@@ -442,12 +497,19 @@ class ReviewDialog(QDialog):
             elif reply == QMessageBox.StandardButton.Cancel:
                 return
 
-        default_filename = f"Ata_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx"
+        prefix = "Resumo_Temas" if minutes_to_export.is_theme_summary else "Ata"
+        default_filename = f"{prefix}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx"
         default_filepath = OUTPUT_DIR / default_filename
+
+        title_dialog = (
+            "Salvar Resumo de Temas em Word (.docx)"
+            if minutes_to_export.is_theme_summary
+            else "Salvar Ata de Reunião em Word (.docx)"
+        )
 
         filepath_str, _ = QFileDialog.getSaveFileName(
             self,
-            "Salvar Ata de Reunião em Word (.docx)",
+            title_dialog,
             str(default_filepath),
             "Documentos Microsoft Word (*.docx)",
         )
@@ -464,8 +526,9 @@ class ReviewDialog(QDialog):
             # Notifica e abre o arquivo
             self.export_completed.emit(str(out_path))
 
+            doc_name = "Resumo Temático" if minutes_to_export.is_theme_summary else "Ata"
             msg_box = QMessageBox(self)
-            msg_box.setWindowTitle("Ata Exportada com Sucesso")
+            msg_box.setWindowTitle(f"{doc_name} Exportado com Sucesso")
             msg_box.setText(f"O documento Word foi gerado com sucesso:\n\n{out_path.name}")
             btn_open = msg_box.addButton("Abrir no Word", QMessageBox.ButtonRole.ActionRole)
             btn_ok = msg_box.addButton("OK", QMessageBox.ButtonRole.AcceptRole)
@@ -481,10 +544,10 @@ class ReviewDialog(QDialog):
             QMessageBox.critical(self, "Erro na Exportação", f"Falha ao gerar documento Word:\n{err}")
 
     def _regenerate_minutes_with_ai(self):
-        """Regenera a ata com IA a partir do texto presente na aba Transcrição."""
+        """Regenera a ata ou resumo com IA a partir do texto presente na aba Transcrição."""
         transcript = self.txt_transcript.toPlainText().strip()
         if not transcript:
-            QMessageBox.warning(self, "Aviso", "Não há transcrição disponível para gerar a ata.")
+            QMessageBox.warning(self, "Aviso", "Não há transcrição disponível para gerar o documento.")
             return
 
         client = OllamaClient()
@@ -498,9 +561,12 @@ class ReviewDialog(QDialog):
             )
             return
 
+        selected_format = self.combo_format.currentData() or "minutes"
+        gen_label = "resumo temático" if selected_format == "theme_summary" else "ata executiva"
+
         self.btn_regenerate.setEnabled(False)
         self.btn_export.setEnabled(False)
-        self.set_progress("Conectando ao Ollama e gerando ata executiva...", 50)
+        self.set_progress(f"Conectando ao Ollama e gerando {gen_label}...", 50)
         self.txt_streaming.clear()
         self.tabs.setCurrentIndex(2)
 
@@ -510,9 +576,10 @@ class ReviewDialog(QDialog):
             finished_success = pyqtSignal(object)
             finished_error = pyqtSignal(str)
 
-            def __init__(self, transcript_text: str):
+            def __init__(self, transcript_text: str, output_format: str = "minutes"):
                 super().__init__()
                 self.transcript_text = transcript_text
+                self.output_format = output_format
 
             def run(self):
                 try:
@@ -524,6 +591,7 @@ class ReviewDialog(QDialog):
                     minutes_obj, _ = gen.generate(
                         transcript_text=self.transcript_text,
                         user_speaker_name=user_speaker_name,
+                        output_format=self.output_format,
                         progress_callback=lambda desc, pct: self.progress_updated.emit(desc, pct),
                         token_callback=lambda tok: self.token_received.emit(tok),
                     )
@@ -531,17 +599,17 @@ class ReviewDialog(QDialog):
                 except Exception as e:
                     self.finished_error.emit(str(e))
 
-        self._regen_worker = RegenerateWorker(transcript)
+        self._regen_worker = RegenerateWorker(transcript, selected_format)
         self._regen_worker.token_received.connect(self.append_stream_token)
         self._regen_worker.progress_updated.connect(self.set_progress)
 
         def on_success(parsed_minutes):
             self.load_minutes(parsed_minutes, transcript)
-            self.set_progress("Ata sintetizada com sucesso pela IA!", 100)
+            self.set_progress(f"{gen_label.capitalize()} sintetizado com sucesso pela IA!", 100)
             self.btn_regenerate.setEnabled(True)
             self.btn_export.setEnabled(True)
             self.tabs.setCurrentIndex(0)
-            QMessageBox.information(self, "Sucesso", "Ata executiva gerada e carregada com sucesso!")
+            QMessageBox.information(self, "Sucesso", f"{gen_label.capitalize()} gerado e carregado com sucesso!")
 
         def on_error(err_msg):
             self.set_progress(f"Erro ao sintetizar com IA: {err_msg}", 0)
@@ -554,30 +622,57 @@ class ReviewDialog(QDialog):
         self._regen_worker.start()
 
     def _copy_to_clipboard(self):
-        """Copia o conteúdo estruturado da ata para a área de transferência."""
+        """Copia o conteúdo estruturado para a área de transferência."""
         minutes = self._collect_edited_minutes()
-        text_lines = [
-            f"# {minutes.title}",
-            f"Data: {minutes.date}",
-            f"Participantes: {', '.join(minutes.participants)}",
-            "",
-            "## Resumo Executivo",
-            minutes.executive_summary,
-            "",
-            "## Decisões Tomadas",
-        ]
-        for d in minutes.decisions:
-            text_lines.append(f"- {d}")
-        text_lines.append("")
-        text_lines.append("## Matriz de Ações")
-        for a in minutes.action_items:
-            text_lines.append(f"- {a.action} | Resp: {a.owner} | Prazo: {a.deadline}")
+        if minutes.is_theme_summary:
+            text_lines = [
+                f"# {minutes.title}",
+                f"Data: {minutes.date}",
+                f"Participantes: {', '.join(minutes.participants)}",
+                "",
+                "## Visão Geral da Discussão",
+                minutes.executive_summary,
+                "",
+            ]
+            if minutes.topics:
+                text_lines.append("## Temas Discutidos")
+                for t in minutes.topics:
+                    text_lines.append(f"### {t.get('topic', 'Tema')}")
+                    if t.get("details"):
+                        text_lines.append(t["details"])
+                    text_lines.append("")
+            if minutes.decisions:
+                text_lines.append("## Deliberações Mencionadas")
+                for d in minutes.decisions:
+                    text_lines.append(f"- {d}")
+                text_lines.append("")
+            if minutes.action_items:
+                text_lines.append("## Ações Mencionadas")
+                for a in minutes.action_items:
+                    text_lines.append(f"- {a.action} | Resp: {a.owner} | Prazo: {a.deadline}")
+        else:
+            text_lines = [
+                f"# {minutes.title}",
+                f"Data: {minutes.date}",
+                f"Participantes: {', '.join(minutes.participants)}",
+                "",
+                "## Resumo Executivo",
+                minutes.executive_summary,
+                "",
+                "## Decisões Tomadas",
+            ]
+            for d in minutes.decisions:
+                text_lines.append(f"- {d}")
+            text_lines.append("")
+            text_lines.append("## Matriz de Ações")
+            for a in minutes.action_items:
+                text_lines.append(f"- {a.action} | Resp: {a.owner} | Prazo: {a.deadline}")
 
         full_text = "\n".join(text_lines)
         clipboard = QApplication.clipboard()
         if clipboard:
             clipboard.setText(full_text)
-            QMessageBox.information(self, "Sucesso", "Texto da ata copiado para a área de transferência!")
+            QMessageBox.information(self, "Sucesso", "Texto copiado para a área de transferência!")
 
     def closeEvent(self, event):
         """Garante encerramento seguro de workers ao fechar a janela."""

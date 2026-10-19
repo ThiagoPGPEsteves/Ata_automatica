@@ -27,6 +27,7 @@ from src.minutes.parser import MeetingMinutes, ActionItem
 from src.ui.floating_widget import FloatingWidget, RecorderState, DualVUMeterWidget
 from src.ui.tray_icon import AtaSystemTrayIcon, create_tray_icon
 from src.ui.review_dialog import ReviewDialog
+from src.ui.audio_settings_dialog import AudioSettingsDialog
 from src.ui.worker_threads import PipelineWorker
 import pytest
 
@@ -205,11 +206,69 @@ def test_pipeline_worker_signals():
     print("  -> TESTE 4 APROVADO: PipelineWorker pronto para orquestração assíncrona!")
 
 
+def test_review_dialog_theme_summary_toggle():
+    """Valida alternância entre formato de Ata e Resumo de Temas no ReviewDialog."""
+    dialog = ReviewDialog()
+
+    # Alterna para resumo de temas
+    idx_theme = dialog.combo_format.findData("theme_summary")
+    assert idx_theme >= 0
+    dialog.combo_format.setCurrentIndex(idx_theme)
+    assert dialog.combo_format.currentData() == "theme_summary"
+    assert dialog.tabs.tabText(0) == "📝 Resumo de Temas"
+    assert "VISÃO GERAL" in dialog.lbl_sec_summary.text()
+
+    # Carrega ata marcada como theme_summary
+    sample_summary = MeetingMinutes(
+        title="Resumo de Temas de TI",
+        date="19/10/2026",
+        participants=["Thiago", "Carlos"],
+        executive_summary="Resumo de alinhamento.",
+        topics=[{"topic": "Tópico 1", "details": "Discussão geral."}],
+        decisions=[],
+        action_items=[],
+        next_steps=[],
+        document_type="theme_summary",
+    )
+    dialog.load_minutes(sample_summary, "[00:01] Olá")
+    assert dialog.combo_format.currentData() == "theme_summary"
+    assert dialog.current_minutes.is_theme_summary
+
+    # Alterna de volta para ata
+    idx_min = dialog.combo_format.findData("minutes")
+    assert idx_min >= 0
+    dialog.combo_format.setCurrentIndex(idx_min)
+    assert dialog.tabs.tabText(0) == "📄 Ata Executiva"
+    assert "RESUMO EXECUTIVO" in dialog.lbl_sec_summary.text()
+    dialog.close()
+
+
+def test_audio_settings_dialog_new_fields():
+    """Valida a presença e opções dos novos campos de formato e idioma no diálogo de configurações."""
+    dialog = AudioSettingsDialog()
+    assert hasattr(dialog, "combo_format")
+    assert hasattr(dialog, "combo_language")
+
+    # Valida opções de formato
+    format_data = [dialog.combo_format.itemData(i) for i in range(dialog.combo_format.count())]
+    assert "minutes" in format_data
+    assert "theme_summary" in format_data
+
+    # Valida opções de idioma
+    lang_data = [dialog.combo_language.itemData(i) for i in range(dialog.combo_language.count())]
+    assert "auto" in lang_data
+    assert "pt" in lang_data
+    assert "es" in lang_data
+    dialog.close()
+
+
 if __name__ == "__main__":
     test_ui_components_instantiation_and_memory()
     test_floating_widget_state_machine_and_signals()
     test_review_dialog_workflow_and_export()
     test_pipeline_worker_signals()
+    test_review_dialog_theme_summary_toggle()
+    test_audio_settings_dialog_new_fields()
 
     print("\n==========================================")
     print("TODOS OS TESTES DA FASE 5 FORAM CONCLUÍDOS COM SUCESSO!")

@@ -65,7 +65,7 @@ ECHOGATE_DOUBLE_TALK_MARGIN_DB = 6.0 # Margem de energia para preservar voz do u
 
 # Prompt de Estilo e Glossário Técnico (Hotwords)
 WHISPER_STYLE_PROMPT = (
-    "Reunião corporativa no Microsoft Teams com ata executiva, decisões e plano de ação."
+    "Reunião corporativa no Microsoft Teams, participantes em português e espanhol, discussões e alinhamentos de negócios."
 )
 DEFAULT_CORPORATE_GLOSSARY = (
     "CCP, Contraparte Central, Colômbia, PJ, B3, Compliance, Ptax, Liquidação, Ponderação"
@@ -77,6 +77,10 @@ OLLAMA_MODEL = "llama3.2:3b"
 OLLAMA_TIMEOUT = 300.0  # 5 minutos de tolerância para reuniões longas em CPU
 OLLAMA_KEEP_ALIVE = "0s"  # Descarrega o modelo da RAM imediatamente após a geração
 OLLAMA_NUM_CTX = 4096     # Janela explícita de contexto (evita truncamento silencioso de transcrições longas)
+
+# Formatos de Saída Suportados
+OUTPUT_FORMAT_MINUTES = "minutes"
+OUTPUT_FORMAT_THEME_SUMMARY = "theme_summary"
 
 # Arquivos Padrão
 DEFAULT_RECORDING_PATH = TEMP_DIR / "recording_dual.wav"
@@ -97,6 +101,8 @@ class UserSettings:
     user_speaker_name: str = "Você"
     audio_retention_days: int = 7
     echo_gate_enabled: bool = True
+    output_format: str = OUTPUT_FORMAT_MINUTES  # "minutes" | "theme_summary"
+    transcription_language: str = "auto"       # "auto" | "pt" | "es"
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -114,6 +120,8 @@ class UserSettings:
             user_speaker_name=str(data.get("user_speaker_name", "Você")),
             audio_retention_days=int(data.get("audio_retention_days", 7)),
             echo_gate_enabled=bool(data.get("echo_gate_enabled", True)),
+            output_format=str(data.get("output_format", OUTPUT_FORMAT_MINUTES)),
+            transcription_language=str(data.get("transcription_language", "auto")),
         )
 
 

@@ -265,10 +265,15 @@ class AtaApplicationController:
         # Carrega os dados no editor da ata
         self.review_dialog.load_minutes(minutes_obj, transcript_text)
 
-        self.tray_icon.notify(
-            "Ata Gerada com Sucesso!",
-            "A ata executiva da reunião está pronta para revisão e exportação em Word.",
+        is_theme = getattr(minutes_obj, "is_theme_summary", False)
+        title_notify = "Resumo Temático Gerado com Sucesso!" if is_theme else "Ata Gerada com Sucesso!"
+        msg_notify = (
+            "O resumo dos temas da reunião está pronto para revisão e exportação em Word."
+            if is_theme
+            else "A ata executiva da reunião está pronta para revisão e exportação em Word."
         )
+
+        self.tray_icon.notify(title_notify, msg_notify)
 
     def _on_pipeline_error(self, error_msg: str):
         """Callback acionado se houver erro durante o processamento de áudio ou IA."""

@@ -31,10 +31,15 @@ class MeetingMinutes:
     action_items: List[ActionItem] = field(default_factory=list)
     next_steps: List[str] = field(default_factory=list)
     raw_markdown: str = ""
+    document_type: str = "minutes"  # "minutes" | "theme_summary"
 
     def to_dict(self) -> Dict[str, Any]:
         data = asdict(self)
         return data
+
+    @property
+    def is_theme_summary(self) -> bool:
+        return self.document_type == "theme_summary"
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "MeetingMinutes":
@@ -77,6 +82,13 @@ class MeetingMinutes:
                     "details": str(t.get("details", "")).strip(),
                 })
 
+        # Extrai highlights/observações como next_steps se for resumo temático
+        next_steps_raw = data.get("next_steps", [])
+        if not next_steps_raw and data.get("highlights"):
+            next_steps_raw = data.get("highlights", [])
+
+        doc_type = str(data.get("document_type", "minutes")).strip() or "minutes"
+
         return cls(
             title=str(data.get("title", "Ata de Reunião")).strip(),
             date=str(data.get("date", "")).strip(),
@@ -85,8 +97,9 @@ class MeetingMinutes:
             topics=topics_list,
             decisions=decisions_list,
             action_items=action_objs,
-            next_steps=[str(s).strip() for s in data.get("next_steps", []) if str(s).strip()],
+            next_steps=[str(s).strip() for s in next_steps_raw if str(s).strip()],
             raw_markdown=str(data.get("raw_markdown", "")),
+            document_type=doc_type,
         )
 
 
@@ -104,13 +117,22 @@ class MinutesParser:
         title_matches = re.finditer(r"^#[ \t]+([^\r\n]+)$", markdown_text, re.MULTILINE)
         for tm in title_matches:
             raw_title = tm.group(1).strip()
-            # Remove prefixos redundantes como "Ata de Reunião: " ou "Ata de Reunião - "
-            cleaned = re.sub(r"^ATA DE REUNI[ÃA]O[ \t]*[:\-–][ \t]*", "", raw_title, flags=re.IGNORECASE).strip()
-            if cleaned and not re.match(r"^ATA DE REUNI[ÃA]O$", cleaned, re.IGNORECASE):
+            # Detecta se é resumo de temas
+            if re.search(r"RESUMO(?: EXECUTIVO)? DE TEMAS", raw_title, flags=re.IGNORECASE):
+                minutes.document_type = "theme_summary"
+
+            # Remove prefixos redundantes como "Ata de Reunião: " ou "Resumo de Temas: "
+            cleaned = re.sub(
+                r"^(?:ATA DE REUNI[ÃA]O|RESUMO(?: EXECUTIVO)? DE TEMAS)[ \t]*[:\-–][ \t]*",
+                "",
+                raw_title,
+                flags=re.IGNORECASE,
+            ).strip()
+            if cleaned and not re.match(r"^(?:ATA DE REUNI[ÃA]O|RESUMO(?: EXECUTIVO)? DE TEMAS)$", cleaned, re.IGNORECASE):
                 minutes.title = cleaned
                 break
-            elif cleaned and re.match(r"^ATA DE REUNI[ÃA]O$", cleaned, re.IGNORECASE):
-                minutes.title = "Ata de Reunião"
+            elif cleaned:
+                minutes.title = "Resumo de Temas" if minutes.is_theme_summary else "Ata de Reunião"
 
         # Divide o texto em seções baseadas nos cabeçalhos H2 (## )
         sections = re.split(r"\n##\s+", "\n" + markdown_text)
@@ -140,13 +162,22 @@ class MinutesParser:
             elif any(k in header for k in ["decisões", "decisoes", "decisão", "decisao", "deliberações", "deliberacoes", "consensos"]):
                 minutes.decisions = cls._parse_bullet_list(content)
 
-            # 6. Plano de Ação (Tabela ou Lista)
-            elif any(k in header for k in ["ação", "ações", "acao", "acoes", "plano de ação", "plano de acao", "atividades", "tarefas"]):
-                minutes.action_items = cls._parse_action_items(content)
-
-            # 7. Próximos Passos e Pendências
-            elif any(k in header for k in ["próximos passos", "proximos passos", "pendências", "pendencias", "encaminhamentos"]):
+            # 6. Destaques, Observações Relevantes e Próximos Passos
+            elif any(k in header for k in [
+                "destaques", "observações", "observacoes", "pontos de atenção", "pontos de atencao",
+                "próximos passos", "proximos passos", "pendências", "pendencias", "encaminhamentos", "insights"
+            ]):
                 minutes.next_steps = cls._parse_bullet_list(content)
+
+            # 7. Plano de Ação (Tabela ou Lista)
+            elif (
+                any(k in header for k in ["plano de ação", "plano de acao", "matriz de ações", "matriz de acoes", "atividades", "tarefas"])
+                or (
+                    re.search(r"\b(?:ações|acoes|ação|acao)\b", header)
+                    and not any(neg in header for neg in ["observa", "considera", "comunica", "opera", "publica"])
+                )
+            ):
+                minutes.action_items = cls._parse_action_items(content)
 
         logger.info(
             "Ata parseada com sucesso: '%s' (%d decisões, %d ações identificadas).",
