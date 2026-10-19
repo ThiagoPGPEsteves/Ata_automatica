@@ -25,6 +25,11 @@ from src.audio.devices import get_default_devices, AudioDeviceInfo
 logger = logging.getLogger(__name__)
 
 
+class AudioCaptureError(RuntimeError):
+    """Exceção levantada quando nenhum canal de áudio pôde ser inicializado para gravação."""
+    pass
+
+
 def resample_to_target(
     audio: np.ndarray,
     orig_sr: int,
@@ -149,12 +154,6 @@ class DualAudioRecorder:
             logger.warning("Gravação já está em andamento.")
             return
 
-        self.writer.open()
-        self._is_recording = True
-        self._is_paused = False
-        self._start_time = time.time()
-        self._pause_duration = 0.0
-
         # Limpa filas e reseta contadores de diagnóstico
         while not self._mic_queue.empty():
             self._mic_queue.get_nowait()
@@ -162,6 +161,8 @@ class DualAudioRecorder:
             self._loop_queue.get_nowait()
         self._dropped_mic_chunks = 0
         self._dropped_loop_chunks = 0
+
+        self.writer.open()
 
         from src.audio.devices import get_device_by_index, get_device_by_name, get_default_devices
 
@@ -270,6 +271,38 @@ class DualAudioRecorder:
                 logger.info("Stream de Loopback Teams aberto com callback (WASAPI).")
             except Exception as e:
                 logger.warning("Erro ao abrir Loopback com callback: %s", e)
+                self._loop_stream = None
+
+        # Validação: Pelo menos um dos dois canais de áudio deve ter sido aberto com sucesso
+        if self._mic_stream is None and self._loop_stream is None:
+            self._is_recording = False
+            self._is_paused = False
+            if self._pyaudio_instance:
+                try:
+                    self._pyaudio_instance.terminate()
+                except Exception:
+                    pass
+                self._pyaudio_instance = None
+            try:
+                self.writer.close()
+                if self.output_path.exists() and self.output_path.stat().st_size <= 44:
+                    self.output_path.unlink(missing_ok=True)
+            except Exception:
+                pass
+            raise AudioCaptureError(
+                "Nenhum canal de áudio pôde ser aberto para gravação (Microfone e Loopback indisponíveis). "
+                "Verifique se o microfone e fone de ouvido estão conectados e permitidos nas configurações de privacidade do Windows."
+            )
+
+        if self._mic_stream is None:
+            logger.warning("Apenas o canal de Loopback (Teams) está ativo. Microfone não foi aberto.")
+        elif self._loop_stream is None:
+            logger.warning("Apenas o canal de Microfone está ativo. Loopback do Teams não foi aberto.")
+
+        self._is_recording = True
+        self._is_paused = False
+        self._start_time = time.time()
+        self._pause_duration = 0.0
 
         # Inicia a thread de escrita que drena as filas e escreve no arquivo WAV
         self._writer_thread = threading.Thread(

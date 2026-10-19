@@ -19,7 +19,7 @@ import psutil
 from src.config import TEMP_DIR
 from src.audio.disk_writer import AudioDiskWriter
 from src.audio.devices import get_default_devices
-from src.audio.recorder import DualAudioRecorder
+from src.audio.recorder import DualAudioRecorder, AudioCaptureError
 import pytest
 
 pytestmark = pytest.mark.integration
@@ -97,10 +97,27 @@ def test_recorder_and_memory_telemetry():
     print(f"  -> TESTE 3 APROVADO: Gravação concluída com consumo de RAM impecável ({peak_ram:.2f} MB)!")
 
 
+def test_recorder_fails_cleanly_when_no_devices():
+    """Testa que o gravador lança AudioCaptureError e não trava se nenhum dispositivo estiver acessível."""
+    from unittest.mock import patch
+
+    test_wav = TEMP_DIR / "test_no_device.wav"
+    recorder = DualAudioRecorder(output_path=test_wav)
+
+    with patch("src.audio.devices.get_default_devices", return_value={"mic": None, "loopback": None}):
+        with pytest.raises(AudioCaptureError):
+            recorder.start()
+
+    assert not recorder.is_recording
+    assert not recorder.writer.is_active
+    print("  -> TESTE 4 APROVADO: Falha de dispositivos tratada com AudioCaptureError e limpeza!")
+
+
 if __name__ == "__main__":
     test_audio_disk_writer()
     test_devices_discovery()
     test_recorder_and_memory_telemetry()
+    test_recorder_fails_cleanly_when_no_devices()
     print("\n==========================================")
     print("TODOS OS TESTES DA FASE 1 FORAM CONCLUÍDOS!")
     print("==========================================")
