@@ -3,9 +3,16 @@ Módulo de Configuração Central da Aplicação Ata Automática
 Configurado com foco em estrito respeito ao orçamento de 4GB de RAM.
 """
 
+import os
+import json
+import logging
+import tempfile
 from pathlib import Path
 from dataclasses import dataclass, asdict
 from typing import Optional, Dict, Any, Union
+
+logger = logging.getLogger(__name__)
+
 
 # Diretórios Base
 ROOT_DIR = Path(__file__).resolve().parent.parent
@@ -127,7 +134,6 @@ class UserSettings:
 
 def get_typed_user_settings() -> UserSettings:
     """Retorna as configurações do usuário como instância tipada de UserSettings."""
-    import json
     default_obj = UserSettings()
     if not USER_CONFIG_PATH.exists():
         return default_obj
@@ -135,7 +141,8 @@ def get_typed_user_settings() -> UserSettings:
         with open(USER_CONFIG_PATH, "r", encoding="utf-8") as f:
             data = json.load(f)
             return UserSettings.from_dict(data)
-    except Exception:
+    except Exception as e:
+        logger.warning("Falha ao ler %s (%s). Usando configurações padrão.", USER_CONFIG_PATH, e)
         return default_obj
 
 
@@ -145,8 +152,7 @@ def get_user_settings() -> dict:
 
 
 def save_user_settings(settings: Union[dict, UserSettings]) -> bool:
-    """Salva as preferências do usuário no arquivo config_user.json (aceita dict ou UserSettings)."""
-    import json
+    """Salva as preferências do usuário de forma atômica no arquivo config_user.json."""
     try:
         current_dict = get_user_settings()
         if isinstance(settings, UserSettings):
@@ -159,8 +165,29 @@ def save_user_settings(settings: Union[dict, UserSettings]) -> bool:
         if "schema_version" not in current_dict:
             current_dict["schema_version"] = 1
 
-        with open(USER_CONFIG_PATH, "w", encoding="utf-8") as f:
-            json.dump(current_dict, f, ensure_ascii=False, indent=2)
-        return True
-    except Exception:
+        target_dir = USER_CONFIG_PATH.parent
+        target_dir.mkdir(parents=True, exist_ok=True)
+
+        temp_fd, temp_path = tempfile.mkstemp(
+            dir=str(target_dir),
+            prefix="config_user_",
+            suffix=".tmp",
+            text=True,
+        )
+        try:
+            with os.fdopen(temp_fd, "w", encoding="utf-8") as f:
+                json.dump(current_dict, f, ensure_ascii=False, indent=2)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(temp_path, USER_CONFIG_PATH)
+            return True
+        except Exception:
+            if os.path.exists(temp_path):
+                try:
+                    os.remove(temp_path)
+                except OSError:
+                    pass
+            raise
+    except Exception as e:
+        logger.warning("Falha ao salvar configurações em %s (%s).", USER_CONFIG_PATH, e)
         return False
