@@ -58,6 +58,7 @@ class ReviewDialog(QDialog):
         self.current_minutes: Optional[MeetingMinutes] = None
         self.transcript_text: str = ""
         self.last_exported_path: Optional[Path] = None
+        self._is_processing: bool = False
 
         self._init_ui()
 
@@ -336,6 +337,30 @@ class ReviewDialog(QDialog):
         else:
             self.lbl_progress_status.setStyleSheet("color: #38BDF8; font-weight: bold;")
 
+    def set_processing_state(self, is_processing: bool, message: Optional[str] = None):
+        """Bloqueia ou desbloqueia ações do usuário durante processamento de IA/pipeline."""
+        self._is_processing = is_processing
+
+        # Desabilita botões e seletores enquanto processa
+        self.btn_export.setEnabled(not is_processing)
+        self.btn_regenerate.setEnabled(not is_processing)
+        self.btn_copy.setEnabled(not is_processing)
+        self.combo_format.setEnabled(not is_processing)
+
+        if is_processing:
+            tip = "Aguarde o processamento em andamento para executar esta ação."
+            self.btn_export.setToolTip(tip)
+            self.btn_regenerate.setToolTip(tip)
+            self.btn_copy.setToolTip(tip)
+            self.combo_format.setToolTip(tip)
+            if message:
+                self.lbl_progress_status.setText(message)
+        else:
+            self.btn_export.setToolTip("")
+            self.btn_regenerate.setToolTip("")
+            self.btn_copy.setToolTip("")
+            self.combo_format.setToolTip("")
+
     def append_stream_token(self, token: str):
         """Adiciona token gerado pelo Ollama na aba de streaming."""
         self.txt_streaming.moveCursor(self.txt_streaming.textCursor().MoveOperation.End)
@@ -361,6 +386,7 @@ class ReviewDialog(QDialog):
 
     def load_minutes(self, minutes: MeetingMinutes, transcript_text: str):
         """Preenche todos os campos com os dados estruturados da ata ou resumo."""
+        self.set_processing_state(False)
         self.current_minutes = minutes
         self.transcript_text = transcript_text
 
@@ -474,6 +500,9 @@ class ReviewDialog(QDialog):
 
     def _export_to_docx(self):
         """Gera o documento Word oficial com os dados da interface."""
+        if self._is_processing:
+            return
+
         minutes_to_export = self._collect_edited_minutes()
 
         has_content = bool(
@@ -545,6 +574,9 @@ class ReviewDialog(QDialog):
 
     def _regenerate_minutes_with_ai(self):
         """Regenera a ata ou resumo com IA a partir do texto presente na aba Transcrição."""
+        if self._is_processing:
+            return
+
         transcript = self.txt_transcript.toPlainText().strip()
         if not transcript:
             QMessageBox.warning(self, "Aviso", "Não há transcrição disponível para gerar o documento.")
@@ -564,8 +596,7 @@ class ReviewDialog(QDialog):
         selected_format = self.combo_format.currentData() or "minutes"
         gen_label = "resumo temático" if selected_format == "theme_summary" else "ata executiva"
 
-        self.btn_regenerate.setEnabled(False)
-        self.btn_export.setEnabled(False)
+        self.set_processing_state(True, f"Conectando ao Ollama e gerando {gen_label}...")
         self.set_progress(f"Conectando ao Ollama e gerando {gen_label}...", 50)
         self.txt_streaming.clear()
         self.tabs.setCurrentIndex(2)
@@ -606,15 +637,13 @@ class ReviewDialog(QDialog):
         def on_success(parsed_minutes):
             self.load_minutes(parsed_minutes, transcript)
             self.set_progress(f"{gen_label.capitalize()} sintetizado com sucesso pela IA!", 100)
-            self.btn_regenerate.setEnabled(True)
-            self.btn_export.setEnabled(True)
+            self.set_processing_state(False)
             self.tabs.setCurrentIndex(0)
             QMessageBox.information(self, "Sucesso", f"{gen_label.capitalize()} gerado e carregado com sucesso!")
 
         def on_error(err_msg):
             self.set_progress(f"Erro ao sintetizar com IA: {err_msg}", 0)
-            self.btn_regenerate.setEnabled(True)
-            self.btn_export.setEnabled(True)
+            self.set_processing_state(False)
             QMessageBox.critical(self, "Erro na Geração", f"Falha ao comunicar com Ollama:\n{err_msg}")
 
         self._regen_worker.finished_success.connect(on_success)
@@ -623,6 +652,8 @@ class ReviewDialog(QDialog):
 
     def _copy_to_clipboard(self):
         """Copia o conteúdo estruturado para a área de transferência."""
+        if self._is_processing:
+            return
         minutes = self._collect_edited_minutes()
         if minutes.is_theme_summary:
             text_lines = [

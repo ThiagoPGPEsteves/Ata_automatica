@@ -239,7 +239,8 @@ class AtaApplicationController:
         self.floating_widget.set_state(RecorderState.PROCESSING)
         self.tray_icon.update_state(RecorderState.PROCESSING)
 
-        # Abre a tela de revisão exibindo a barra de progresso
+        # Abre a tela de revisão exibindo a barra de progresso e bloqueando botões durante processamento
+        self.review_dialog.set_processing_state(True, "Finalizando gravação no disco...")
         self.review_dialog.set_progress("Finalizando gravação no disco...", 5)
         self.review_dialog.show()
         self.review_dialog.raise_()
@@ -262,15 +263,16 @@ class AtaApplicationController:
         self.floating_widget.set_state(RecorderState.IDLE)
         self.tray_icon.update_state(RecorderState.IDLE)
 
-        # Carrega os dados no editor da ata
+        # Carrega os dados no editor da ata e restaura estado interativo dos botões
         self.review_dialog.load_minutes(minutes_obj, transcript_text)
+        self.review_dialog.set_processing_state(False)
 
         is_theme = getattr(minutes_obj, "is_theme_summary", False)
         title_notify = "Resumo Temático Gerado com Sucesso!" if is_theme else "Ata Gerada com Sucesso!"
         msg_notify = (
             "O resumo dos temas da reunião está pronto para revisão e exportação em Word."
             if is_theme
-            else "A ata executiva da reunião está pronta para revisão e exportação em Word."
+            else "Ata executiva da reunião está pronta para revisão e exportação em Word."
         )
 
         self.tray_icon.notify(title_notify, msg_notify)
@@ -280,6 +282,10 @@ class AtaApplicationController:
         logger.error("Erro no pipeline: %s", error_msg)
         self.floating_widget.set_state(RecorderState.IDLE)
         self.tray_icon.update_state(RecorderState.IDLE)
+
+        # Restaura estado interativo para permitir regeneração manual ou edição
+        self.review_dialog.set_processing_state(False)
+        self.review_dialog.set_progress(f"Falha no processamento: {error_msg[:60]}", 0)
 
         self.tray_icon.notify(
             "Falha no Processamento",

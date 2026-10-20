@@ -270,6 +270,59 @@ if __name__ == "__main__":
     test_review_dialog_theme_summary_toggle()
     test_audio_settings_dialog_new_fields()
 
+
+def test_review_dialog_processing_state_locks_buttons():
+    """Valida que o estado de processamento desabilita botões e previne chamadas concorrentes."""
+    from unittest.mock import patch
+
+    dialog = ReviewDialog()
+
+    # Estado inicial: botões habilitados
+    assert dialog.btn_export.isEnabled()
+    assert dialog.btn_regenerate.isEnabled()
+    assert dialog.btn_copy.isEnabled()
+    assert dialog.combo_format.isEnabled()
+    assert not dialog._is_processing
+
+    # 1. Ativa estado de processamento
+    dialog.set_processing_state(True, "Processando transcrição...")
+    assert dialog._is_processing is True
+    assert not dialog.btn_export.isEnabled()
+    assert not dialog.btn_regenerate.isEnabled()
+    assert not dialog.btn_copy.isEnabled()
+    assert not dialog.combo_format.isEnabled()
+    assert "Aguarde" in dialog.btn_export.toolTip()
+    assert "Processando transcrição" in dialog.lbl_progress_status.text()
+
+    # 2. Testa guardas internas durante processamento (não devem disparar ações)
+    with patch.object(dialog, "_collect_edited_minutes") as mock_collect:
+        dialog._export_to_docx()
+        mock_collect.assert_not_called()
+
+    with patch.object(dialog, "set_progress") as mock_prog:
+        dialog._regenerate_minutes_with_ai()
+        mock_prog.assert_not_called()
+
+    # 3. Restaura estado e confere desbloqueio
+    dialog.set_processing_state(False)
+    assert dialog._is_processing is False
+    assert dialog.btn_export.isEnabled()
+    assert dialog.btn_regenerate.isEnabled()
+    assert dialog.btn_copy.isEnabled()
+    assert dialog.combo_format.isEnabled()
+    assert dialog.btn_export.toolTip() == ""
+    dialog.close()
+
+
+if __name__ == "__main__":
+    test_ui_components_instantiation_and_memory()
+    test_floating_widget_state_machine_and_signals()
+    test_review_dialog_workflow_and_export()
+    test_pipeline_worker_signals()
+    test_review_dialog_theme_summary_toggle()
+    test_audio_settings_dialog_new_fields()
+    test_review_dialog_processing_state_locks_buttons()
+
     print("\n==========================================")
     print("TODOS OS TESTES DA FASE 5 FORAM CONCLUÍDOS COM SUCESSO!")
     print("==========================================")
