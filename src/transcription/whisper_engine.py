@@ -178,6 +178,8 @@ class WhisperEngine:
         self.compute_type = compute_type
         self.cpu_threads = cpu_threads
         self.model_size = select_optimal_model_size(model_size)
+        self.last_detected_language: Optional[str] = None
+        self.last_language_probability: Optional[float] = None
 
         self._model = None
         self._is_loaded = False
@@ -268,10 +270,17 @@ class WhisperEngine:
         from src.utils.telemetry import RTFEstimator
         rtf_estimator = RTFEstimator(total_duration)
 
+        detected_lang = getattr(info, "language", None) or "desconhecido"
+        lang_prob = getattr(info, "language_probability", None)
+        prob_str = f"{lang_prob * 100:.2f}%" if lang_prob is not None else "N/A"
+
+        self.last_detected_language = str(detected_lang)
+        self.last_language_probability = float(lang_prob) if lang_prob is not None else None
+
         logger.info(
-            "Idioma detectado: '%s' com probabilidade %.2f%%. Duração: %.2fs",
-            info.language,
-            info.language_probability * 100,
+            "Idioma detectado: '%s' com probabilidade %s. Duração: %.2fs",
+            detected_lang,
+            prob_str,
             total_duration,
         )
 

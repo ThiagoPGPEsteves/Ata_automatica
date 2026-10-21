@@ -179,11 +179,67 @@ def test_whisper_engine_transcription_and_unload():
     print("  -> TESTE 3 APROVADO: faster-whisper transcreveu e descarregou 100% da memória com sucesso!")
 
 
+def test_whisper_engine_transcribe_with_none_language_probability():
+    """Valida que a transcrição não falha quando info.language_probability ou info.language forem None."""
+    from unittest.mock import MagicMock
+
+    engine = WhisperEngine(model_size="base")
+    engine._is_loaded = True
+    engine._model = MagicMock()
+
+    class FakeSegment:
+        def __init__(self, start, end, text):
+            self.start = start
+            self.end = end
+            self.text = text
+
+    fake_segments = [FakeSegment(0.0, 1.0, "Teste de robustez de idioma")]
+
+    # 1. Caso com language_probability = None e language = None
+    fake_info_none = MagicMock()
+    fake_info_none.duration = 1.0
+    fake_info_none.language = None
+    fake_info_none.language_probability = None
+
+    engine._model.transcribe.return_value = (fake_segments, fake_info_none)
+
+    dummy_audio = np.zeros(16000, dtype=np.float32)
+    results = engine.transcribe(dummy_audio)
+
+    assert len(results) == 1
+    assert results[0]["text"] == "Teste de robustez de idioma"
+    assert engine.last_detected_language == "desconhecido"
+    assert engine.last_language_probability is None
+
+    # 2. Caso com objeto info sem atributos (objeto genérico)
+    class EmptyInfo:
+        pass
+
+    engine._model.transcribe.return_value = (fake_segments, EmptyInfo())
+    results_empty = engine.transcribe(dummy_audio)
+    assert len(results_empty) == 1
+    assert engine.last_detected_language == "desconhecido"
+    assert engine.last_language_probability is None
+
+    # 3. Caso normal com idioma e probabilidade válidos
+    fake_info_valid = MagicMock()
+    fake_info_valid.duration = 1.0
+    fake_info_valid.language = "pt"
+    fake_info_valid.language_probability = 0.985
+
+    engine._model.transcribe.return_value = (fake_segments, fake_info_valid)
+    results_valid = engine.transcribe(dummy_audio)
+    assert len(results_valid) == 1
+    assert engine.last_detected_language == "pt"
+    assert engine.last_language_probability == 0.985
+
+
 if __name__ == "__main__":
     test_model_selection()
     test_dsp_audio_preprocessing()
     test_post_process_and_diarization()
     test_whisper_engine_transcription_and_unload()
+    test_whisper_engine_transcribe_with_none_language_probability()
     print("\n==========================================")
     print("TODOS OS TESTES DA FASE 2 FORAM CONCLUÍDOS!")
     print("==========================================")
