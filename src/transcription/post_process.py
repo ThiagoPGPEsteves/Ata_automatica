@@ -5,6 +5,7 @@ intercala os diálogos cronologicamente por timestamps e formata a transcrição
 """
 
 import json
+import re
 import wave
 import logging
 from pathlib import Path
@@ -65,17 +66,42 @@ def split_dual_channel_audio(wav_path: Union[str, Path]) -> Tuple[np.ndarray, np
     return ch_mic, ch_teams, sample_rate
 
 
+# Stopwords multilíngues (Português, Espanhol, Inglês) com 3+ caracteres para o filtro acústico de eco.
+# Palavras com 1 ou 2 letras já são naturalmente ignoradas pelo regex \b\w{3,}\b.
+ACOUSTIC_STOPWORDS: frozenset[str] = frozenset({
+    # Português
+    "que", "com", "para", "pra", "não", "nao", "uma", "umas", "este", "esta", "estas", "estes",
+    "está", "estao", "estão", "estava", "estavam", "isso", "esse", "essa", "esses", "essas",
+    "aquele", "aquela", "aqueles", "aquelas", "aquilo", "como", "por", "mais", "dos", "das",
+    "ele", "ela", "eles", "elas", "você", "voce", "vocês", "voces", "mas", "nos", "tem", "ter",
+    "temos", "tenho", "tinha", "tinham", "foi", "ser", "são", "sao", "era", "eram", "estar",
+    "aqui", "pelo", "pela", "pelos", "pelas", "então", "entao", "depois", "ainda", "assim",
+    "também", "tambem", "onde", "quando", "muito", "muita", "muitos", "muitas", "sobre",
+    "entre", "mesmo", "mesma", "mesmos", "mesmas", "sempre", "nunca", "quase", "todo", "toda",
+    "todos", "todas", "outro", "outra", "outros", "outras", "algo", "nada", "fazer", "feito",
+    "pode", "podem", "poder",
+
+    # Espanhol
+    "los", "las", "les", "del", "uno", "una", "unos", "unas", "ella", "ellos", "ellas",
+    "nosotros", "nosotras", "usted", "ustedes", "esto", "estos", "estas", "ese", "esa", "eso",
+    "esos", "esas", "aquel", "aquella", "aquellos", "aquellas", "pero", "entonces", "porque",
+    "cuando", "donde", "aunque", "sino", "pues", "mientras", "sin", "desde", "hasta", "hacia",
+    "más", "mas", "muy", "bien", "bueno", "buena", "buenos", "buenas", "aquí", "allí", "alli",
+    "ahora", "también", "tambien", "cada", "alguien", "nadie", "tanto", "tanta", "tantos", "tantas",
+    "casi", "sido", "están", "estan", "tiene", "tienen", "tenemos", "había", "habia", "hay",
+    "hubo", "hecho", "hace", "vamos",
+
+    # Inglês corporativo comum
+    "the", "and", "for", "that", "with", "this", "from", "have", "has", "had", "are", "you",
+    "not", "but", "they", "all", "can", "will", "one", "about", "there", "their", "what",
+    "when", "which", "been", "some", "more", "just", "like", "then", "into", "them", "your",
+})
+
+
 def clean_text_tokens(text: str) -> set:
     """Extrai palavras limpas em minúsculas para comparação de conjunto (filtrando stopwords)."""
-    import re
-    stopwords = {
-        'que', 'com', 'para', 'não', 'uma', 'um', 'este', 'esta', 'está',
-        'isso', 'esse', 'essa', 'como', 'por', 'mais', 'dos', 'das', 'ele',
-        'ela', 'eles', 'elas', 'mas', 'nos', 'tem', 'ter', 'foi', 'ser', 'são',
-        'aqui', 'pelo', 'pela', 'então', 'pra'
-    }
     tokens = re.findall(r"\b\w{3,}\b", text.lower())
-    return {w for w in tokens if w not in stopwords}
+    return {w for w in tokens if w not in ACOUSTIC_STOPWORDS}
 
 
 def filter_acoustic_echo_segments(

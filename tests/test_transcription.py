@@ -29,6 +29,9 @@ from src.transcription.post_process import (
     merge_channel_transcripts,
     format_transcript_dialogue,
     process_dual_recording,
+    clean_text_tokens,
+    filter_acoustic_echo_segments,
+    ACOUSTIC_STOPWORDS,
 )
 import pytest
 
@@ -234,12 +237,97 @@ def test_whisper_engine_transcribe_with_none_language_probability():
     assert engine.last_language_probability == 0.985
 
 
+def test_clean_text_tokens_multilingual_stopwords():
+    """Valida a remoção de stopwords em Português, Espanhol e Inglês e a preservação de termos de conteúdo."""
+    # Português
+    pt_text = "Nós temos que verificar o relatório e o orçamento do projeto com a equipe."
+    pt_tokens = clean_text_tokens(pt_text)
+    assert "relatório" in pt_tokens
+    assert "orçamento" in pt_tokens
+    assert "projeto" in pt_tokens
+    assert "equipe" in pt_tokens
+    # Stopwords devem ser removidas
+    for sw in ["temos", "que", "com"]:
+        assert sw not in pt_tokens
+
+    # Espanhol
+    es_text = "Pero entonces nosotros tenemos que revisar los detalles del presupuesto para el proyecto."
+    es_tokens = clean_text_tokens(es_text)
+    assert "revisar" in es_tokens
+    assert "detalles" in es_tokens
+    assert "presupuesto" in es_tokens
+    assert "proyecto" in es_tokens
+    # Stopwords em espanhol devem ser removidas
+    for sw in ["pero", "entonces", "nosotros", "tenemos", "los", "del", "para"]:
+        assert sw not in es_tokens
+
+    # Inglês
+    en_text = "We will discuss the architecture and performance of the system with the team."
+    en_tokens = clean_text_tokens(en_text)
+    assert "discuss" in en_tokens
+    assert "architecture" in en_tokens
+    assert "performance" in en_tokens
+    assert "system" in en_tokens
+    assert "team" in en_tokens
+    for sw in ["will", "the", "and", "with"]:
+        assert sw not in en_tokens
+
+
+def test_filter_acoustic_echo_segments_spanish():
+    """Valida a supressão de eco acústico em falas em Espanhol e a não-supressão de falas genuínas."""
+    # Cenário: Participante do Teams fala sobre o cronograma em espanhol
+    teams_segments = [
+        {
+            "start": 10.0,
+            "end": 15.0,
+            "text": "Vamos a revisar el presupuesto del proyecto para el próximo trimestre.",
+        }
+    ]
+
+    # Canal do Microfone:
+    # 1. Vazamento acústico dos alto-falantes captado pelo microfone no mesmo intervalo (eco)
+    # 2. Fala genuína do usuário concordando e propondo outro ponto com expressões conversacionais
+    user_segments = [
+        {
+            "start": 10.5,
+            "end": 14.5,
+            "text": "revisar el presupuesto del proyecto para el próximo trimestre",
+        },
+        {
+            "start": 16.0,
+            "end": 20.0,
+            "text": "De acuerdo, pero entonces yo presentaré las métricas de calidad.",
+        },
+    ]
+
+    clean_user = filter_acoustic_echo_segments(user_segments, teams_segments)
+
+    # O segmento de eco (10.5 - 14.5) deve ter sido eliminado
+    assert len(clean_user) == 1
+    assert "métricas" in clean_user[0]["text"]
+    assert clean_user[0]["start"] == 16.0
+
+    # Cenário de sobreposição temporal mas falas genuinamente distintas com stopwords em espanhol:
+    concurrent_user_speech = [
+        {
+            "start": 11.0,
+            "end": 14.0,
+            "text": "Pero entonces comenzaremos con la arquitectura del servidor.",
+        }
+    ]
+    # Mesmo compartilhando stopwords como 'pero', 'entonces', 'con', as palavras de conteúdo são diferentes
+    clean_concurrent = filter_acoustic_echo_segments(concurrent_user_speech, teams_segments)
+    assert len(clean_concurrent) == 1, "Fala genuína do usuário com stopwords comuns não deve ser descartada como eco"
+
+
 if __name__ == "__main__":
     test_model_selection()
     test_dsp_audio_preprocessing()
     test_post_process_and_diarization()
     test_whisper_engine_transcription_and_unload()
     test_whisper_engine_transcribe_with_none_language_probability()
+    test_clean_text_tokens_multilingual_stopwords()
+    test_filter_acoustic_echo_segments_spanish()
     print("\n==========================================")
     print("TODOS OS TESTES DA FASE 2 FORAM CONCLUÍDOS!")
     print("==========================================")
