@@ -150,6 +150,7 @@ class AtaApplicationController:
         self.tray_icon.stop_requested.connect(self.stop_and_process)
         self.tray_icon.settings_requested.connect(self.open_audio_settings)
         self.tray_icon.show_widget_requested.connect(self.show_floating_widget)
+        self.tray_icon.review_requested.connect(self.show_review_dialog)
         self.tray_icon.exit_requested.connect(self.exit_app)
 
     def open_audio_settings(self):
@@ -205,6 +206,7 @@ class AtaApplicationController:
             )
             self.floating_widget.set_state(RecorderState.RECORDING)
             self.tray_icon.update_state(RecorderState.RECORDING)
+            self.tray_icon.set_review_enabled(False)
             self.tray_icon.notify(
                 "Gravação Iniciada",
                 "Capturando microfone e participantes da reunião Teams.",
@@ -238,6 +240,7 @@ class AtaApplicationController:
         logger.info("Finalizando reunião e iniciando processamento do pipeline...")
         self.floating_widget.set_state(RecorderState.PROCESSING)
         self.tray_icon.update_state(RecorderState.PROCESSING)
+        self.tray_icon.set_review_enabled(True)
 
         # Abre a tela de revisão exibindo a barra de progresso e bloqueando botões durante processamento
         self.review_dialog.set_processing_state(True, "Finalizando gravação no disco...")
@@ -266,6 +269,7 @@ class AtaApplicationController:
         # Carrega os dados no editor da ata e restaura estado interativo dos botões
         self.review_dialog.load_minutes(minutes_obj, transcript_text)
         self.review_dialog.set_processing_state(False)
+        self.tray_icon.set_review_enabled(True)
 
         is_theme = getattr(minutes_obj, "is_theme_summary", False)
         title_notify = "Resumo Temático Gerado com Sucesso!" if is_theme else "Ata Gerada com Sucesso!"
@@ -286,6 +290,7 @@ class AtaApplicationController:
         # Restaura estado interativo para permitir regeneração manual ou edição
         self.review_dialog.set_processing_state(False)
         self.review_dialog.set_progress(f"Falha no processamento: {error_msg[:60]}", 0)
+        self.tray_icon.set_review_enabled(True)
 
         self.tray_icon.notify(
             "Falha no Processamento",
@@ -306,6 +311,12 @@ class AtaApplicationController:
         self.floating_widget.show()
         self.floating_widget.raise_()
         self.floating_widget.activateWindow()
+
+    def show_review_dialog(self):
+        """Exibe e traz para o foco a janela de revisão e exportação da ata executiva."""
+        self.review_dialog.show()
+        self.review_dialog.raise_()
+        self.review_dialog.activateWindow()
 
     def hide_to_tray(self):
         """Minimiza a barra flutuante para a bandeja do Windows."""

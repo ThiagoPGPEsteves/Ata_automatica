@@ -314,6 +314,36 @@ def test_review_dialog_processing_state_locks_buttons():
     dialog.close()
 
 
+def test_tray_icon_review_action_and_signal():
+    """Valida a presença, controle de estado e emissão de sinal da ação de revisão no menu do tray."""
+    tray = AtaSystemTrayIcon()
+
+    # 1. Valida existência de act_review e estado inicial (desabilitado)
+    assert hasattr(tray, "act_review")
+    assert not tray.act_review.isEnabled()
+    assert "Nenhuma ata" in tray.act_review.toolTip()
+
+    # 2. Testa emissão do sinal review_requested
+    signal_received = {"called": False}
+    tray.review_requested.connect(lambda: signal_received.update(called=True))
+
+    tray.set_review_enabled(True)
+    assert tray.act_review.isEnabled() is True
+    assert "Reabre a janela" in tray.act_review.toolTip()
+
+    tray.act_review.trigger()
+    assert signal_received["called"] is True
+
+    # 3. Testa transições de estado via update_state
+    # Gravação nova: deve desabilitar act_review
+    tray.update_state(RecorderState.RECORDING)
+    assert not tray.act_review.isEnabled()
+
+    # Processamento: deve habilitar act_review para permitir reabertura do diálogo de progresso
+    tray.update_state(RecorderState.PROCESSING)
+    assert tray.act_review.isEnabled() is True
+
+
 if __name__ == "__main__":
     test_ui_components_instantiation_and_memory()
     test_floating_widget_state_machine_and_signals()
@@ -322,6 +352,7 @@ if __name__ == "__main__":
     test_review_dialog_theme_summary_toggle()
     test_audio_settings_dialog_new_fields()
     test_review_dialog_processing_state_locks_buttons()
+    test_tray_icon_review_action_and_signal()
 
     print("\n==========================================")
     print("TODOS OS TESTES DA FASE 5 FORAM CONCLUÍDOS COM SUCESSO!")

@@ -51,6 +51,7 @@ class AtaSystemTrayIcon(QSystemTrayIcon):
     resume_requested = pyqtSignal()
     stop_requested = pyqtSignal()
     show_widget_requested = pyqtSignal()
+    review_requested = pyqtSignal()
     settings_requested = pyqtSignal()
     open_output_dir_requested = pyqtSignal()
     exit_requested = pyqtSignal()
@@ -115,6 +116,12 @@ class AtaSystemTrayIcon(QSystemTrayIcon):
         self.act_show.triggered.connect(self.show_widget_requested.emit)
         self.menu.addAction(self.act_show)
 
+        self.act_review = QAction("📄 Visualizar / Exportar Ata Atual...", self)
+        self.act_review.setEnabled(False)
+        self.act_review.setToolTip("Nenhuma ata gerada ou em processamento no momento.")
+        self.act_review.triggered.connect(self.review_requested.emit)
+        self.menu.addAction(self.act_review)
+
         self.act_settings = QAction("⚙ Configurar Áudio & Fones...", self)
         self.act_settings.triggered.connect(self.settings_requested.emit)
         self.menu.addAction(self.act_settings)
@@ -155,6 +162,14 @@ class AtaSystemTrayIcon(QSystemTrayIcon):
             pass
         self.open_output_dir_requested.emit()
 
+    def set_review_enabled(self, enabled: bool):
+        """Habilita ou desabilita a ação de reabrir a janela de revisão no menu da bandeja."""
+        self.act_review.setEnabled(enabled)
+        if enabled:
+            self.act_review.setToolTip("Reabre a janela de revisão e exportação da ata atual.")
+        else:
+            self.act_review.setToolTip("Nenhuma ata gerada ou em processamento no momento.")
+
     def update_state(self, state: RecorderState):
         """Atualiza visual e opções do menu conforme o estado."""
         self.state = state
@@ -174,6 +189,7 @@ class AtaSystemTrayIcon(QSystemTrayIcon):
             self.act_pause_resume.setEnabled(True)
             self.act_pause_resume.setText("❚❚ Pausar Gravação")
             self.act_stop.setEnabled(True)
+            self.set_review_enabled(False)
 
         elif state == RecorderState.PAUSED:
             self.setIcon(self.icon_paused)
@@ -189,6 +205,7 @@ class AtaSystemTrayIcon(QSystemTrayIcon):
             self.act_start.setEnabled(False)
             self.act_pause_resume.setEnabled(False)
             self.act_stop.setEnabled(False)
+            self.set_review_enabled(True)
 
     def notify(self, title: str, message: str, icon_type=QSystemTrayIcon.MessageIcon.Information):
         """Exibe notificação nativa do Windows."""
