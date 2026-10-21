@@ -135,18 +135,18 @@ class OllamaClient:
         )
 
         try:
+            start_stream_time = time.time()
             if callback:
-                # Modo streaming: timeout de conexão (15s) e leitura por chunk (45s de inatividade)
-                chunk_read_timeout = 45.0
+                # Modo streaming: timeout de conexão (30s) e leitura tolerante a cold-start do modelo e compilação de gramática em CPU
+                chunk_read_timeout = max(self.timeout, 180.0)
                 full_text = []
                 last_chunk: Dict[str, Any] = {}
-                start_stream_time = time.time()
 
                 with requests.post(
                     f"{self.base_url}/api/generate",
                     json=payload,
                     stream=True,
-                    timeout=(15.0, chunk_read_timeout),
+                    timeout=(30.0, chunk_read_timeout),
                 ) as response:
                     if response.status_code == 404:
                         raise OllamaModelNotFoundError(
@@ -176,7 +176,7 @@ class OllamaClient:
                 response = requests.post(
                     f"{self.base_url}/api/generate",
                     json=payload,
-                    timeout=self.timeout,
+                    timeout=(30.0, self.timeout),
                 )
                 if response.status_code == 404:
                     raise OllamaModelNotFoundError(
@@ -200,4 +200,5 @@ class OllamaClient:
                 "Verifique se o Ollama está rodando no computador."
             )
         except requests.exceptions.Timeout:
-            raise TimeoutError(f"Tempo limite ({self.timeout}s) excedido ao aguardar resposta do Ollama.")
+            elapsed = time.time() - start_stream_time if "start_stream_time" in locals() else 0
+            raise TimeoutError(f"Tempo limite ({elapsed:.1f}s / máx {self.timeout}s) excedido ao aguardar resposta do Ollama.")
