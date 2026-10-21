@@ -38,8 +38,8 @@ from src.config import OUTPUT_DIR, OLLAMA_URL, OLLAMA_MODEL, OLLAMA_KEEP_ALIVE
 from src.minutes.parser import MinutesParser, MeetingMinutes, ActionItem
 from src.minutes.ollama_client import OllamaClient
 from src.minutes.prompts import generate_meeting_minutes_prompt
-from src.minutes.generator import MinutesGenerator
 from src.exporter.docx_builder import DocxMeetingMinutesBuilder
+from src.exporter.outlook_dispatcher import OutlookDispatcher
 
 
 class ReviewDialog(QDialog):
@@ -153,6 +153,15 @@ class ReviewDialog(QDialog):
             }
             QPushButton#btnExport:hover {
                 background-color: #276299;
+            }
+            QPushButton#btnEmail {
+                background-color: #0E5C8A;
+                border: 1px solid #2E75B6;
+                font-size: 13px;
+                padding: 10px 18px;
+            }
+            QPushButton#btnEmail:hover {
+                background-color: #1274AD;
             }
             QPushButton#btnSecondary {
                 background-color: #2D3748;
@@ -326,6 +335,11 @@ class ReviewDialog(QDialog):
         self.btn_export.clicked.connect(self._export_to_docx)
         bottom_layout.addWidget(self.btn_export)
 
+        self.btn_email = QPushButton("📧 Enviar por Outlook", self)
+        self.btn_email.setObjectName("btnEmail")
+        self.btn_email.clicked.connect(self._send_by_email_outlook)
+        bottom_layout.addWidget(self.btn_email)
+
         main_layout.addLayout(bottom_layout)
 
     def set_progress(self, message: str, percent: int):
@@ -343,6 +357,7 @@ class ReviewDialog(QDialog):
 
         # Desabilita botões e seletores enquanto processa
         self.btn_export.setEnabled(not is_processing)
+        self.btn_email.setEnabled(not is_processing)
         self.btn_regenerate.setEnabled(not is_processing)
         self.btn_copy.setEnabled(not is_processing)
         self.combo_format.setEnabled(not is_processing)
@@ -350,6 +365,7 @@ class ReviewDialog(QDialog):
         if is_processing:
             tip = "Aguarde o processamento em andamento para executar esta ação."
             self.btn_export.setToolTip(tip)
+            self.btn_email.setToolTip(tip)
             self.btn_regenerate.setToolTip(tip)
             self.btn_copy.setToolTip(tip)
             self.combo_format.setToolTip(tip)
@@ -357,6 +373,7 @@ class ReviewDialog(QDialog):
                 self.lbl_progress_status.setText(message)
         else:
             self.btn_export.setToolTip("")
+            self.btn_email.setToolTip("")
             self.btn_regenerate.setToolTip("")
             self.btn_copy.setToolTip("")
             self.combo_format.setToolTip("")
@@ -571,6 +588,78 @@ class ReviewDialog(QDialog):
 
         except Exception as err:
             QMessageBox.critical(self, "Erro na Exportação", f"Falha ao gerar documento Word:\n{err}")
+
+    def _send_by_email_outlook(self):
+        """Gera o rascunho oficial de e-mail no Outlook com o resumo e ata .docx anexada."""
+        if self._is_processing:
+            return
+
+        minutes_to_send = self._collect_edited_minutes()
+
+        has_content = bool(
+            minutes_to_send.executive_summary.strip()
+            or minutes_to_send.topics
+            or minutes_to_send.decisions
+        )
+
+        if not has_content:
+            reply = QMessageBox.question(
+                self,
+                "Documento sem Conteúdo",
+                "O documento ainda não possui Resumo ou Tópicos preenchidos.\n\n"
+                "Deseja gerar o conteúdo agora utilizando a IA local (Ollama)?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No | QMessageBox.StandardButton.Cancel,
+                QMessageBox.StandardButton.Yes,
+            )
+            if reply == QMessageBox.StandardButton.Yes:
+                self._regenerate_minutes_with_ai()
+                return
+            elif reply == QMessageBox.StandardButton.Cancel:
+                return
+
+        # Garante que o arquivo .docx existe (se já foi salvo pelo usuário, usa ele; senão, gera em OUTPUT_DIR)
+        docx_path = self.last_exported_path
+        if not docx_path or not docx_path.exists():
+            prefix = "Resumo_Temas" if minutes_to_send.is_theme_summary else "Ata"
+            default_filename = f"{prefix}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx"
+            docx_path = OUTPUT_DIR / default_filename
+            try:
+                builder = DocxMeetingMinutesBuilder()
+                builder.build(minutes_to_send, docx_path)
+                self.last_exported_path = docx_path
+                self.export_completed.emit(str(docx_path))
+            except Exception as ex:
+                QMessageBox.critical(self, "Erro na Geração", f"Não foi possível gerar o arquivo Word para anexo:\n{ex}")
+                return
+
+        # Dispara criação do rascunho no Outlook
+        dispatcher = OutlookDispatcher()
+        success, msg = dispatcher.create_outlook_draft(
+            minutes=minutes_to_send,
+            docx_path=docx_path,
+            display=True,
+        )
+
+        if success:
+            QMessageBox.information(
+                self,
+                "Rascunho Criado no Outlook",
+                f"O rascunho da mensagem foi aberto com sucesso no Microsoft Outlook!\n\n"
+                f"📎 Anexo incluído: {docx_path.name}\n"
+                f"Basta conferir os destinatários e clicar em 'Enviar'."
+            )
+        else:
+            # Fallback amigável se Outlook não estiver disponível
+            reply = QMessageBox.question(
+                self,
+                "Outlook Indisponível",
+                f"Não foi possível abrir o rascunho automaticamente no Outlook:\n{msg}\n\n"
+                f"Deseja abrir o e-mail padrão ou abrir a pasta onde o documento Word está salvo para anexo manual?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.Yes,
+            )
+            if reply == QMessageBox.StandardButton.Yes:
+                dispatcher.open_mailto_fallback(minutes_to_send, docx_path)
 
     def _regenerate_minutes_with_ai(self):
         """Regenera a ata ou resumo com IA a partir do texto presente na aba Transcrição."""

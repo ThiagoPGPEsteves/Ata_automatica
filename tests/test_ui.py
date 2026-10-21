@@ -279,6 +279,7 @@ def test_review_dialog_processing_state_locks_buttons():
 
     # Estado inicial: botões habilitados
     assert dialog.btn_export.isEnabled()
+    assert dialog.btn_email.isEnabled()
     assert dialog.btn_regenerate.isEnabled()
     assert dialog.btn_copy.isEnabled()
     assert dialog.combo_format.isEnabled()
@@ -288,15 +289,20 @@ def test_review_dialog_processing_state_locks_buttons():
     dialog.set_processing_state(True, "Processando transcrição...")
     assert dialog._is_processing is True
     assert not dialog.btn_export.isEnabled()
+    assert not dialog.btn_email.isEnabled()
     assert not dialog.btn_regenerate.isEnabled()
     assert not dialog.btn_copy.isEnabled()
     assert not dialog.combo_format.isEnabled()
     assert "Aguarde" in dialog.btn_export.toolTip()
+    assert "Aguarde" in dialog.btn_email.toolTip()
     assert "Processando transcrição" in dialog.lbl_progress_status.text()
 
     # 2. Testa guardas internas durante processamento (não devem disparar ações)
     with patch.object(dialog, "_collect_edited_minutes") as mock_collect:
         dialog._export_to_docx()
+        mock_collect.assert_not_called()
+
+        dialog._send_by_email_outlook()
         mock_collect.assert_not_called()
 
     with patch.object(dialog, "set_progress") as mock_prog:
@@ -307,10 +313,47 @@ def test_review_dialog_processing_state_locks_buttons():
     dialog.set_processing_state(False)
     assert dialog._is_processing is False
     assert dialog.btn_export.isEnabled()
+    assert dialog.btn_email.isEnabled()
     assert dialog.btn_regenerate.isEnabled()
     assert dialog.btn_copy.isEnabled()
     assert dialog.combo_format.isEnabled()
     assert dialog.btn_export.toolTip() == ""
+    assert dialog.btn_email.toolTip() == ""
+    dialog.close()
+
+
+def test_review_dialog_send_by_email_outlook(tmp_path):
+    """Valida o clique no botão 'Enviar por Outlook' e a integração com o OutlookDispatcher."""
+    from unittest.mock import patch, MagicMock
+
+    dialog = ReviewDialog()
+    minutes = MeetingMinutes(
+        title="Reunião de Diretoria",
+        date="21/10/2026",
+        executive_summary="Resumo de teste executivo.",
+        decisions=["Aprovada expansão de infraestrutura."],
+    )
+    dialog.load_minutes(minutes, "Transcrição de teste.")
+
+    fake_docx = tmp_path / "Ata_20261021.docx"
+    fake_docx.write_text("fake docx", encoding="utf-8")
+    dialog.last_exported_path = fake_docx
+
+    with patch("src.ui.review_dialog.OutlookDispatcher") as mock_dispatcher_cls, \
+         patch("src.ui.review_dialog.QMessageBox.information") as mock_info:
+        mock_instance = MagicMock()
+        mock_instance.create_outlook_draft.return_value = (True, "Sucesso")
+        mock_dispatcher_cls.return_value = mock_instance
+
+        dialog.btn_email.click()
+
+        mock_instance.create_outlook_draft.assert_called_once()
+        call_kwargs = mock_instance.create_outlook_draft.call_args[1]
+        assert call_kwargs["minutes"].title == "Reunião de Diretoria"
+        assert call_kwargs["docx_path"] == fake_docx
+        assert call_kwargs["display"] is True
+        mock_info.assert_called_once()
+
     dialog.close()
 
 
@@ -352,6 +395,7 @@ if __name__ == "__main__":
     test_review_dialog_theme_summary_toggle()
     test_audio_settings_dialog_new_fields()
     test_review_dialog_processing_state_locks_buttons()
+    test_review_dialog_send_by_email_outlook(Path("."))
     test_tray_icon_review_action_and_signal()
 
     print("\n==========================================")

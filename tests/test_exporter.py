@@ -17,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from src.config import OUTPUT_DIR
 from src.minutes.parser import MeetingMinutes, ActionItem, MinutesParser
 from src.exporter.docx_builder import DocxMeetingMinutesBuilder
+from src.exporter.outlook_dispatcher import OutlookDispatcher
 import pytest
 
 pytestmark = pytest.mark.unit
@@ -216,11 +217,167 @@ def test_docx_theme_summary_generation():
     print("  -> TESTE 4 APROVADO: Resumo Temático gerado no Word com layout limpo e sem tabelas vazias!")
 
 
+def test_outlook_dispatcher_subject():
+    """Valida a formação do assunto de e-mail para ata e resumo de temas."""
+    dispatcher = OutlookDispatcher()
+
+    # 1. Ata Padrão
+    minutes = MeetingMinutes(
+        title="Alinhamento Semanal de Engenharia",
+        date="21/10/2026",
+    )
+    subj = dispatcher.build_email_subject(minutes)
+    assert subj == "Ata de Reunião Executiva: Alinhamento Semanal de Engenharia - 21/10/2026"
+
+    # 2. Resumo de Temas
+    theme_minutes = MeetingMinutes(
+        title="Debate Geral sobre IA",
+        date="21/10/2026",
+        document_type="theme_summary",
+    )
+    theme_subj = dispatcher.build_email_subject(theme_minutes)
+    assert theme_subj == "Resumo de Temas: Debate Geral sobre IA - 21/10/2026"
+
+
+def test_outlook_dispatcher_html_body_and_escaping():
+    """Valida a geração de corpo HTML corporativo e escape correto de caracteres especiais."""
+    dispatcher = OutlookDispatcher()
+    minutes = MeetingMinutes(
+        title="Reunião <Estratégica> & Orçamento",
+        date="21/10/2026",
+        participants=["Thiago <Engenheiro>", "Diretoria & Finanças"],
+        executive_summary="Resumo com termos 'críticos' & dados sensíveis.\nSegunda linha.",
+        decisions=["Aprovada alocação de 100% dos recursos.", "Implementação em Q1."],
+        action_items=[
+            ActionItem(action="Contratar consultoria <especial>", owner="Thiago", deadline="30/10/2026")
+        ],
+        topics=[
+            {"title": "Pauta Financeira", "description": "Detalhes de custos e CAPEX."}
+        ],
+    )
+
+    html_body = dispatcher.build_email_html(minutes, docx_filename="Ata_20261021.docx")
+
+    # 1. Checa escapes
+    assert "&lt;Estratégica&gt;" in html_body
+    assert "&amp; Orçamento" in html_body
+    assert "Thiago &lt;Engenheiro&gt;" in html_body
+    assert "&lt;especial&gt;" in html_body
+
+    # 2. Checa estrutura e identidade visual
+    assert "#1F4E79" in html_body
+    assert "#2E75B6" in html_body
+    assert "1. RESUMO EXECUTIVO" in html_body
+    assert "2. DELIBERAÇÕES E DECISÕES" in html_body
+    assert "3. PLANO DE AÇÃO E RESPONSABILIDADES" in html_body
+    assert "Ata_20261021.docx" in html_body
+    assert "Documento Oficial Anexado:" in html_body
+
+
+def test_outlook_dispatcher_create_draft_success_mock(tmp_path):
+    """Valida o fluxo bem-sucedido de criação de rascunho com mock do PowerShell COM."""
+    from unittest.mock import patch, MagicMock
+
+    fake_docx = tmp_path / "Ata_Teste.docx"
+    fake_docx.write_text("fake docx content", encoding="utf-8")
+
+    dispatcher = OutlookDispatcher()
+    minutes = MeetingMinutes(
+        title="Reunião Piloto",
+        date="21/10/2026",
+        executive_summary="Resumo de teste.",
+    )
+
+    mock_res = MagicMock()
+    mock_res.stdout = "SUCCESS:Draft displayed\n"
+    mock_res.stderr = ""
+
+    with patch("subprocess.run", return_value=mock_res) as mock_run:
+        success, msg = dispatcher.create_outlook_draft(
+            minutes=minutes,
+            docx_path=fake_docx,
+            display=True,
+            to_recipients=["equipe@empresa.com", "gerencia@empresa.com"],
+        )
+
+        assert success is True
+        assert "sucesso" in msg.lower()
+        mock_run.assert_called_once()
+        cmd_args = mock_run.call_args[0][0]
+        assert "powershell" in cmd_args[0]
+
+
+def test_outlook_dispatcher_create_draft_error_mock(tmp_path):
+    """Valida o tratamento de erros do PowerShell COM ao tentar criar o rascunho."""
+    from unittest.mock import patch, MagicMock
+
+    fake_docx = tmp_path / "Ata_Teste.docx"
+    fake_docx.write_text("fake docx content", encoding="utf-8")
+
+    dispatcher = OutlookDispatcher()
+    minutes = MeetingMinutes(title="Reunião Falha", date="21/10/2026")
+
+    mock_res = MagicMock()
+    mock_res.stdout = "ERROR:Acesso negado pela política do sistema (GPO).\n"
+    mock_res.stderr = ""
+
+    with patch("subprocess.run", return_value=mock_res):
+        success, msg = dispatcher.create_outlook_draft(
+            minutes=minutes,
+            docx_path=fake_docx,
+            display=True,
+        )
+
+        assert success is False
+        assert "Acesso negado" in msg
+
+
+def test_outlook_dispatcher_missing_docx():
+    """Valida que um arquivo .docx inexistente retorna erro imediato sem acionar subprocess."""
+    from unittest.mock import patch
+
+    dispatcher = OutlookDispatcher()
+    minutes = MeetingMinutes(title="Teste Sem Arquivo")
+
+    with patch("subprocess.run") as mock_run:
+        success, msg = dispatcher.create_outlook_draft(
+            minutes=minutes,
+            docx_path=Path("arquivo_inexistente_123456.docx"),
+        )
+        assert success is False
+        assert "não encontrado" in msg.lower()
+        mock_run.assert_not_called()
+
+
+def test_outlook_dispatcher_mailto_fallback(tmp_path):
+    """Valida o funcionamento do fallback via mailto e abertura de pasta."""
+    from unittest.mock import patch
+
+    fake_docx = tmp_path / "Ata_Fallback.docx"
+    fake_docx.write_text("dummy", encoding="utf-8")
+
+    dispatcher = OutlookDispatcher()
+    minutes = MeetingMinutes(title="Reunião Fallback", date="21/10/2026", executive_summary="Resumo")
+
+    with patch("webbrowser.open") as mock_web, patch("os.startfile") as mock_startfile:
+        res = dispatcher.open_mailto_fallback(minutes, fake_docx)
+        assert res is True
+        mock_web.assert_called_once()
+        assert "mailto:" in mock_web.call_args[0][0]
+        mock_startfile.assert_called_once_with(str(fake_docx.parent.resolve()))
+
+
 if __name__ == "__main__":
     test_docx_generation_from_model()
     test_docx_document_integrity()
     test_markdown_to_docx_pipeline()
     test_docx_theme_summary_generation()
+    test_outlook_dispatcher_subject()
+    test_outlook_dispatcher_html_body_and_escaping()
+    test_outlook_dispatcher_create_draft_success_mock(Path("."))
+    test_outlook_dispatcher_create_draft_error_mock(Path("."))
+    test_outlook_dispatcher_missing_docx()
+    test_outlook_dispatcher_mailto_fallback(Path("."))
     print("\n==========================================")
     print("TODOS OS TESTES DA FASE 4 FORAM CONCLUÍDOS!")
     print("==========================================")
