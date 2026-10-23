@@ -36,6 +36,7 @@ from PyQt6.QtGui import QFont
 
 from src.config import OUTPUT_DIR, OLLAMA_URL, OLLAMA_MODEL, OLLAMA_KEEP_ALIVE
 from src.minutes.parser import MinutesParser, MeetingMinutes, ActionItem
+from src.minutes.generator import MinutesGenerator
 from src.minutes.ollama_client import OllamaClient
 from src.minutes.prompts import generate_meeting_minutes_prompt
 from src.exporter.docx_builder import DocxMeetingMinutesBuilder

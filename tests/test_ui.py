@@ -387,6 +387,27 @@ def test_tray_icon_review_action_and_signal():
     assert tray.act_review.isEnabled() is True
 
 
+def test_review_dialog_regenerate_worker_import_and_instantiation():
+    """Valida que MinutesGenerator está importado e acessível para o RegenerateWorker sem NameError."""
+    from unittest.mock import MagicMock, patch
+    from src.ui.review_dialog import ReviewDialog, MinutesGenerator
+
+    # Valida que MinutesGenerator foi devidamente importado no módulo review_dialog
+    assert MinutesGenerator is not None
+
+    dialog = ReviewDialog()
+    dialog.txt_transcript.setPlainText("[00:00] Teste de fala")
+
+    with patch("src.minutes.ollama_client.OllamaClient.is_available", return_value=True), \
+         patch("src.minutes.generator.MinutesGenerator.generate") as mock_gen:
+        mock_gen.return_value = (MeetingMinutes(title="Ata Gerada"), "Markdown")
+        # Simula chamada sem que dispare erro de NameError
+        dialog._regenerate_minutes_with_ai()
+        assert dialog._regen_worker is not None
+        dialog._regen_worker.wait(2000)
+    dialog.close()
+
+
 if __name__ == "__main__":
     test_ui_components_instantiation_and_memory()
     test_floating_widget_state_machine_and_signals()

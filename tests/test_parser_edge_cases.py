@@ -99,3 +99,41 @@ def test_meeting_minutes_dataclass_serialization():
     assert restored.title == original.title
     assert restored.action_items[0].action == "Fazer tarefa"
     assert restored.action_items[0].evidence_ts == "01:00"
+
+
+@pytest.mark.unit
+def test_parser_bold_sections_and_owner_format():
+    """Valida extração resiliente quando o LLM usa cabeçalhos em negrito em vez de ## e listas [Owner]: Action."""
+    md = (
+        "**Reunião do dia 23/10/2026**\n\n"
+        "**Participantes:**\n\n"
+        "*   Daniel\n"
+        "*   Cássio\n"
+        "*   Thiago\n\n"
+        "**Objetivos da Reunião:**\n\n"
+        "*   Discutir os requisitos do IRB para o projeto\n"
+        "*   Definir a visão de crédito para o grupo e cliente\n\n"
+        "**Decisões e Plano de Ação:**\n\n"
+        "1.  **Visão de Crédito:** A decisão de crédito será feita na visão de grupo.\n"
+        "2.  **Fluxo de Priorização:** O fluxo será padronizado.\n\n"
+        "**Próximos Passos:**\n\n"
+        "*   Averiguar como o crédito está fazendo gestão.\n\n"
+        "**Responsáveis:**\n\n"
+        "*   [Daniel]: Definir o tema do IF e o cadastro do CGI\n"
+        "*   Thiago: Preparar o fluxo de priorização\n"
+    )
+
+    parsed = MinutesParser.parse(md)
+
+    assert "Reunião" in parsed.title
+    assert len(parsed.participants) == 3
+    assert "Daniel" in parsed.participants
+    assert "IRB" in parsed.executive_summary
+    assert len(parsed.decisions) == 2
+    assert len(parsed.next_steps) == 1
+    assert len(parsed.action_items) == 2
+    assert parsed.action_items[0].owner == "Daniel"
+    assert "cadastro do CGI" in parsed.action_items[0].action
+    assert parsed.action_items[1].owner == "Thiago"
+    assert "priorização" in parsed.action_items[1].action
+

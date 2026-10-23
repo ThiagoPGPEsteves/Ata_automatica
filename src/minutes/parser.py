@@ -134,32 +134,71 @@ class MinutesParser:
             elif cleaned:
                 minutes.title = "Resumo de Temas" if minutes.is_theme_summary else "Ata de Reunião"
 
-        # Divide o texto em seções baseadas nos cabeçalhos H2 (## )
-        sections = re.split(r"\n##\s+", "\n" + markdown_text)
+        # 1.1 Fallback de título para cabeçalhos isolados em negrito no início do documento (quando ausente # H1)
+        if minutes.title in ("Ata de Reunião", "Resumo de Temas"):
+            first_bold = re.search(r"^\s*(?:\d+[\.\)]\s*)?\*\*([^*\n]+?)\*\*[:\s]*$", markdown_text, re.MULTILINE)
+            if first_bold:
+                cand = first_bold.group(1).strip(" :*")
+                if any(k in cand.lower() for k in ["reunião", "reuniao", "ata", "alinhamento", "status", "resumo"]):
+                    cleaned = re.sub(r"\[.*?\]", "", cand).strip(" -:–")
+                    if cleaned:
+                        minutes.title = cleaned
 
-        for sec in sections:
-            sec = sec.strip()
-            if not sec:
+        # 2. Divide o texto em seções baseadas prioritariamente em cabeçalhos formais H2 (## )
+        sections_raw = re.split(r"\n##\s+", "\n" + markdown_text)
+        sections = []
+
+        if len(sections_raw) > 1:
+            for sec in sections_raw:
+                sec = sec.strip()
+                if not sec:
+                    continue
+                lines = sec.split("\n")
+                sections.append((lines[0].strip().lower(), "\n".join(lines[1:]).strip()))
+        else:
+            # Fallback resiliente para modelos que não usaram '## ' (usaram H3 ou linhas isoladas em negrito **Seção:**)
+            header_pattern = re.compile(
+                r"^(?:(?P<h_hashes>#{1,3})\s+(?P<h_title>[^\n]+)|(?:\d+[\.\)]\s*)?\*\*(?P<b_title>[^*\n]+)\*\*[:\s]*)$",
+                re.MULTILINE,
+            )
+            matches = list(header_pattern.finditer(markdown_text))
+            for i, m in enumerate(matches):
+                hdr = (m.group("h_title") or m.group("b_title")).strip(" :*").lower()
+                start_pos = m.end()
+                end_pos = matches[i + 1].start() if i + 1 < len(matches) else len(markdown_text)
+                body = markdown_text[start_pos:end_pos].strip()
+                sections.append((hdr, body))
+
+        for header, content in sections:
+            if not content:
                 continue
-
-            lines = sec.split("\n")
-            header = lines[0].strip().lower()
-            content = "\n".join(lines[1:]).strip()
 
             # 2. Informações Gerais / Participantes
             if any(k in header for k in ["informações", "informacoes", "dados", "participantes"]):
                 cls._parse_info_section(content, minutes)
+                if not minutes.participants and any(k in header for k in ["participantes"]):
+                    bullets = cls._parse_bullet_list(content)
+                    if bullets:
+                        minutes.participants = [b for b in bullets if not b.lower().startswith("data:")]
 
-            # 3. Resumo Executivo
-            elif any(k in header for k in ["resumo", "visão geral", "visao geral", "sumário", "sumario"]):
-                minutes.executive_summary = content
+            # 3. Resumo Executivo / Objetivos
+            elif any(k in header for k in [
+                "resumo", "visão geral", "visao geral", "sumário", "sumario",
+                "objetivo", "objetivos", "contexto", "visão de crédito", "visao de credito"
+            ]):
+                if not minutes.executive_summary:
+                    minutes.executive_summary = content
+                elif content and content not in minutes.executive_summary:
+                    minutes.executive_summary += "\n\n" + content
 
             # 4. Pautas e Discussões
             elif any(k in header for k in ["pauta", "discussões", "discussoes", "tópicos", "topicos"]):
                 minutes.topics = cls._parse_topics(content)
 
             # 5. Decisões Tomadas
-            elif any(k in header for k in ["decisões", "decisoes", "decisão", "decisao", "deliberações", "deliberacoes", "consensos"]):
+            elif any(k in header for k in [
+                "decisões", "decisoes", "decisão", "decisao", "deliberações", "deliberacoes", "consensos"
+            ]):
                 minutes.decisions = cls._parse_bullet_list(content)
 
             # 6. Destaques, Observações Relevantes e Próximos Passos
@@ -169,9 +208,12 @@ class MinutesParser:
             ]):
                 minutes.next_steps = cls._parse_bullet_list(content)
 
-            # 7. Plano de Ação (Tabela ou Lista)
+            # 7. Plano de Ação / Responsáveis (Tabela ou Lista)
             elif (
-                any(k in header for k in ["plano de ação", "plano de acao", "matriz de ações", "matriz de acoes", "atividades", "tarefas"])
+                any(k in header for k in [
+                    "plano de ação", "plano de acao", "matriz de ações", "matriz de acoes",
+                    "atividades", "tarefas", "responsáveis", "responsaveis"
+                ])
                 or (
                     re.search(r"\b(?:ações|acoes|ação|acao)\b", header)
                     and not any(neg in header for neg in ["observa", "considera", "comunica", "opera", "publica"])
@@ -197,6 +239,11 @@ class MinutesParser:
             elif "participantes" in line.lower() and ":" in line:
                 parts = line.split(":", 1)[1].strip(" *_-")
                 minutes.participants = [p.strip() for p in parts.split(",") if p.strip()]
+
+        if not minutes.participants:
+            bullets = cls._parse_bullet_list(content)
+            if bullets:
+                minutes.participants = [b for b in bullets if not b.lower().startswith("data:")]
 
     @classmethod
     def _parse_bullet_list(cls, content: str) -> List[str]:
@@ -308,6 +355,14 @@ class MinutesParser:
                     deadline = deadline_match.group(1).strip()
 
                 clean_action = re.sub(r"\(?(?:Responsável|Quem|Prazo|Quando)[^\)]*\)?", "", full_text).strip(" -:;,")
+
+                # Se não identificou responsável entre parênteses, verifica formato [Responsável]: Ação ou Responsável: Ação
+                if owner == "Não definido":
+                    prefix_owner_match = re.match(r"^\[?([^:\]]+)\]?\s*:\s*(.+)$", full_text)
+                    if prefix_owner_match and not any(kw in prefix_owner_match.group(1).lower() for kw in ["ação", "acao", "item", "tarefa", "nota", "obs"]):
+                        owner = prefix_owner_match.group(1).strip(" []")
+                        clean_action = prefix_owner_match.group(2).strip()
+
                 actions.append(
                     ActionItem(
                         action=clean_action or full_text,
