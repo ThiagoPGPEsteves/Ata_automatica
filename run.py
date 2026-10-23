@@ -142,6 +142,7 @@ class AtaApplicationController:
         self.floating_widget.stop_requested.connect(self.stop_and_process)
         self.floating_widget.settings_requested.connect(self.open_audio_settings)
         self.floating_widget.minimize_tray_requested.connect(self.hide_to_tray)
+        self.floating_widget.close_requested.connect(self.exit_app)
 
         # Ações originadas no Menu da Bandeja (System Tray)
         self.tray_icon.start_requested.connect(self.start_recording)

@@ -18,6 +18,7 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QFrame,
     QSizePolicy,
+    QMessageBox,
 )
 from PyQt6.QtGui import QPainter, QColor, QBrush, QPen, QFont
 
@@ -81,6 +82,7 @@ class FloatingWidget(QWidget):
     stop_requested = pyqtSignal()
     settings_requested = pyqtSignal()
     minimize_tray_requested = pyqtSignal()
+    close_requested = pyqtSignal()
 
     def __init__(
         self,
@@ -164,6 +166,19 @@ class FloatingWidget(QWidget):
             QPushButton#btnMinimize:hover {
                 color: #FFFFFF;
             }
+            QPushButton#btnClose {
+                background-color: transparent;
+                color: #A0AEC0;
+                border: none;
+                font-size: 13px;
+                font-weight: bold;
+                padding: 0 4px;
+                border-radius: 4px;
+            }
+            QPushButton#btnClose:hover {
+                background-color: #E74C3C;
+                color: #FFFFFF;
+            }
             """
         )
 
@@ -225,6 +240,13 @@ class FloatingWidget(QWidget):
         self.btn_minimize.clicked.connect(self._on_minimize_clicked)
         layout.addWidget(self.btn_minimize)
 
+        # 8. Botão Fechar Aplicação
+        self.btn_close = QPushButton("✕", self.main_container)
+        self.btn_close.setObjectName("btnClose")
+        self.btn_close.setToolTip("Fechar e Encerrar a Aplicação")
+        self.btn_close.clicked.connect(self._on_close_clicked)
+        layout.addWidget(self.btn_close)
+
         # Layout da Janela
         root_layout = QHBoxLayout(self)
         root_layout.setContentsMargins(0, 0, 0, 0)
@@ -275,6 +297,34 @@ class FloatingWidget(QWidget):
 
     def _on_minimize_clicked(self):
         self.minimize_tray_requested.emit()
+
+    def _on_close_clicked(self):
+        """Solicita encerramento da aplicação com salvaguardas caso esteja gravando ou processando."""
+        if self.state in (RecorderState.RECORDING, RecorderState.PAUSED):
+            reply = QMessageBox.question(
+                self,
+                "Gravação em Andamento",
+                "Uma gravação de reunião está em andamento.\n\n"
+                "Deseja realmente interromper e encerrar a aplicação?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            if reply != QMessageBox.StandardButton.Yes:
+                return
+
+        elif self.state == RecorderState.PROCESSING:
+            reply = QMessageBox.question(
+                self,
+                "Processamento em Andamento",
+                "A ata de reunião está sendo gerada pela inteligência artificial.\n\n"
+                "Encerrar agora cancelará a geração da ata. Deseja realmente sair?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            if reply != QMessageBox.StandardButton.Yes:
+                return
+
+        self.close_requested.emit()
 
     def set_state(self, state: RecorderState):
         """Atualiza a interface conforme o estado da aplicação."""

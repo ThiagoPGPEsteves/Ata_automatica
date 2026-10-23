@@ -83,6 +83,9 @@ def test_floating_widget_state_machine_and_signals():
     assert widget.lbl_status.text() == "PRONTO"
     assert widget.btn_record.isEnabled()
     assert not widget.btn_stop.isEnabled()
+    assert hasattr(widget, "btn_close")
+    assert widget.btn_close.isEnabled()
+    assert "✕" in widget.btn_close.text()
 
     # 2. Transição para RECORDING
     signal_received = {"start": False, "pause": False, "resume": False, "stop": False}
@@ -406,6 +409,45 @@ def test_review_dialog_regenerate_worker_import_and_instantiation():
         assert dialog._regen_worker is not None
         dialog._regen_worker.wait(2000)
     dialog.close()
+
+
+def test_floating_widget_close_button_flow():
+    """Valida o funcionamento do botão fechar na barra flutuante e suas salvaguardas de confirmação."""
+    from unittest.mock import patch
+    from PyQt6.QtWidgets import QMessageBox
+
+    widget = FloatingWidget()
+    close_signals = []
+    widget.close_requested.connect(lambda: close_signals.append(True))
+
+    # 1. Modo IDLE: deve emitir close_requested imediatamente sem bloquear
+    assert widget.state == RecorderState.IDLE
+    widget.btn_close.click()
+    assert len(close_signals) == 1
+
+    # 2. Modo RECORDING com resposta "Não": NÃO deve emitir sinal
+    widget.set_state(RecorderState.RECORDING)
+    with patch.object(QMessageBox, "question", return_value=QMessageBox.StandardButton.No):
+        widget.btn_close.click()
+        assert len(close_signals) == 1  # Permanece 1, pois foi recusado
+
+    # 3. Modo RECORDING com resposta "Sim": DEVE emitir sinal
+    with patch.object(QMessageBox, "question", return_value=QMessageBox.StandardButton.Yes):
+        widget.btn_close.click()
+        assert len(close_signals) == 2
+
+    # 4. Modo PROCESSING com resposta "Não": NÃO deve emitir sinal
+    widget.set_state(RecorderState.PROCESSING)
+    with patch.object(QMessageBox, "question", return_value=QMessageBox.StandardButton.No):
+        widget.btn_close.click()
+        assert len(close_signals) == 2
+
+    # 5. Modo PROCESSING com resposta "Sim": DEVE emitir sinal
+    with patch.object(QMessageBox, "question", return_value=QMessageBox.StandardButton.Yes):
+        widget.btn_close.click()
+        assert len(close_signals) == 3
+
+    widget.close()
 
 
 if __name__ == "__main__":
