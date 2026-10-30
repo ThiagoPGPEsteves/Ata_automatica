@@ -81,6 +81,7 @@ DEFAULT_CORPORATE_GLOSSARY = (
 # Configurações de IA (Ollama Local)
 OLLAMA_URL = "http://localhost:11434"
 OLLAMA_MODEL = "llama3.2:3b"
+OLLAMA_EMBED_MODEL = "nomic-embed-text"
 OLLAMA_TIMEOUT = 300.0  # 5 minutos de tolerância para reuniões longas em CPU
 OLLAMA_KEEP_ALIVE = "0s"  # Descarrega o modelo da RAM imediatamente após a geração
 OLLAMA_NUM_CTX = 4096     # Janela explícita de contexto (evita truncamento silencioso de transcrições longas)
@@ -93,6 +94,7 @@ OUTPUT_FORMAT_THEME_SUMMARY = "theme_summary"
 DEFAULT_RECORDING_PATH = TEMP_DIR / "recording_dual.wav"
 DEFAULT_TRANSCRIPT_PATH = TEMP_DIR / "transcript.json"
 USER_CONFIG_PATH = ROOT_DIR / "config_user.json"
+RAG_DB_PATH = SESSIONS_DIR / "rag_index.sqlite"
 
 
 @dataclass
@@ -110,6 +112,7 @@ class UserSettings:
     echo_gate_enabled: bool = True
     output_format: str = OUTPUT_FORMAT_MINUTES  # "minutes" | "theme_summary"
     transcription_language: str = "auto"       # "auto" | "pt" | "es"
+    rag_auto_index: bool = True                # Indexação automática pós-exportação no RAG
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -129,6 +132,7 @@ class UserSettings:
             echo_gate_enabled=bool(data.get("echo_gate_enabled", True)),
             output_format=str(data.get("output_format", OUTPUT_FORMAT_MINUTES)),
             transcription_language=str(data.get("transcription_language", "auto")),
+            rag_auto_index=bool(data.get("rag_auto_index", True)),
         )
 
 
