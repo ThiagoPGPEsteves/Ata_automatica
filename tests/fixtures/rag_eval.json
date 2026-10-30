@@ -1,0 +1,265 @@
+{
+  "sessions": [
+    {
+      "session_id": "2026-10-15_100000",
+      "title": "Planejamento e Orçamento do Projeto QCCP",
+      "transcript": {
+        "text": "[00:00:15] [Thiago]: Bom dia a todos. Vamos iniciar o alinhamento do projeto QCCP e definir prazos e recursos.\n[00:01:20] [Beatriz]: O cronograma inicial previa entrega em novembro, mas precisamos estender o prazo final para 15 de dezembro devido aos testes de estresse.\n[00:02:45] [Thiago]: De acordo. O prazo de entrega do QCCP fica oficialmente adiado para 15 de dezembro.\n[00:03:30] [Carlos]: Em relação à infraestrutura física dos servidores locais, o custo total orçado e aprovado ficou em R$ 180.000,00.\n[00:04:50] [Beatriz]: Perfeito, temos margem aprovada pela diretoria financeira para esses 180 mil reais.\n[00:06:10] [Thiago]: E quanto à segurança da informação e auditoria de vulnerabilidades, quem assume a liderança técnica?\n[00:07:05] [Carlos]: Eu assumo a liderança técnica de segurança e entrego o relatório preliminar de pentest até 10 de novembro.\n[00:08:40] [Beatriz]: O alinhamento de homologação com a equipe técnica da B3 foi agendado para o dia 20 de novembro às 14h.\n[00:09:50] [Thiago]: Excelente. Pauta concluída com sucesso.",
+        "segments": [
+          {"speaker": "Thiago", "start": 15.0, "end": 45.0, "text": "Bom dia a todos. Vamos iniciar o alinhamento do projeto QCCP e definir prazos e recursos."},
+          {"speaker": "Beatriz", "start": 80.0, "end": 140.0, "text": "O cronograma inicial previa entrega em novembro, mas precisamos estender o prazo final para 15 de dezembro devido aos testes de estresse."},
+          {"speaker": "Thiago", "start": 165.0, "end": 195.0, "text": "De acordo. O prazo de entrega do QCCP fica oficialmente adiado para 15 de dezembro."},
+          {"speaker": "Carlos", "start": 210.0, "end": 260.0, "text": "Em relação à infraestrutura física dos servidores locais, o custo total orçado e aprovado ficou em R$ 180.000,00."},
+          {"speaker": "Beatriz", "start": 290.0, "end": 340.0, "text": "Perfeito, temos margem aprovada pela diretoria financeira para esses 180 mil reais."},
+          {"speaker": "Thiago", "start": 370.0, "end": 410.0, "text": "E quanto à segurança da informação e auditoria de vulnerabilidades, quem assume a liderança técnica?"},
+          {"speaker": "Carlos", "start": 425.0, "end": 480.0, "text": "Eu assumo a liderança técnica de segurança e entrego o relatório preliminar de pentest até 10 de novembro."},
+          {"speaker": "Beatriz", "start": 520.0, "end": 570.0, "text": "O alinhamento de homologação com a equipe técnica da B3 foi agendado para o dia 20 de novembro às 14h."},
+          {"speaker": "Thiago", "start": 590.0, "end": 600.0, "text": "Excelente. Pauta concluída com sucesso."}
+        ]
+      },
+      "minutes": {
+        "title": "Ata Executiva: Planejamento QCCP",
+        "meeting_date": "15/10/2026 10:00",
+        "summary": "Reunião de alinhamento com definição do novo prazo de entrega para 15 de dezembro, orçamento de infraestrutura e homologação com a B3.",
+        "decisions": [
+          {"decision": "Prorrogação do prazo de entrega do projeto QCCP para 15 de dezembro de 2026.", "evidence_ts": "00:02:45"},
+          {"decision": "Aprovação do orçamento de R$ 180.000,00 para aquisição de servidores locais.", "evidence_ts": "00:03:30"}
+        ],
+        "action_items": [
+          {"action": "Elaborar relatório preliminar de pentest e segurança", "owner": "Carlos", "deadline": "10/11/2026", "evidence": "00:07:05"},
+          {"action": "Conduzir alinhamento técnico de homologação com a B3", "owner": "Beatriz", "deadline": "20/11/2026", "evidence": "00:08:40"}
+        ]
+      }
+    },
+    {
+      "session_id": "2026-10-22_143000",
+      "title": "Alinhamento de Compliance e LGPD",
+      "transcript": {
+        "text": "[00:00:20] [Mariana]: Iniciando a sessão sobre as políticas de governança e adequação à LGPD na Ata Automática.\n[00:01:10] [Renato]: A principal exigência jurídica é que os arquivos de áudio brutos sejam expurgados em no máximo 7 dias.\n[00:02:20] [Thiago]: Concordo plenamente. O prazo de retenção de áudio fica configurado em estritamente 7 dias, preservando apenas as atas e transcrições.\n[00:03:40] [Mariana]: Em relação ao processamento dos modelos de linguagem, fica ratificado o uso exclusivo do Llama 3.2 3B rodando localmente sem envio para nuvens públicas.\n[00:05:00] [Renato]: Eu implementarei a rotina automatizada de expurgo de dados antigos e a validação do log de auditoria até o dia 28 de outubro.\n[00:06:15] [Mariana]: Eu ficarei encarregada de realizar o treinamento de conformidade com a equipe de auditoria interna até 30 de novembro.\n[00:07:30] [Thiago]: Excelente. Política de privacidade e retenção de 7 dias aprovada por todos.",
+        "segments": [
+          {"speaker": "Mariana", "start": 20.0, "end": 50.0, "text": "Iniciando a sessão sobre as políticas de governança e adequação à LGPD na Ata Automática."},
+          {"speaker": "Renato", "start": 70.0, "end": 120.0, "text": "A principal exigência jurídica é que os arquivos de áudio brutos sejam expurgados em no máximo 7 dias."},
+          {"speaker": "Thiago", "start": 140.0, "end": 200.0, "text": "Concordo plenamente. O prazo de retenção de áudio fica configurado em estritamente 7 dias, preservando apenas as atas e transcrições."},
+          {"speaker": "Mariana", "start": 220.0, "end": 280.0, "text": "Em relação ao processamento dos modelos de linguagem, fica ratificado o uso exclusivo do Llama 3.2 3B rodando localmente sem envio para nuvens públicas."},
+          {"speaker": "Renato", "start": 300.0, "end": 350.0, "text": "Eu implementarei a rotina automatizada de expurgo de dados antigos e a validação do log de auditoria até o dia 28 de outubro."},
+          {"speaker": "Mariana", "start": 375.0, "end": 430.0, "text": "Eu ficarei encarregada de realizar o treinamento de conformidade com a equipe de auditoria interna até 30 de novembro."},
+          {"speaker": "Thiago", "start": 450.0, "end": 480.0, "text": "Excelente. Política de privacidade e retenção de 7 dias aprovada por todos."}
+        ]
+      },
+      "minutes": {
+        "title": "Ata Executiva: Governança LGPD",
+        "meeting_date": "22/10/2026 14:30",
+        "summary": "Definição de diretrizes de proteção de dados (LGPD), fixando retenção máxima de áudio em 7 dias e garantia de IA 100% offline.",
+        "decisions": [
+          {"decision": "Fixar o período de retenção de áudio em 7 dias com expurgo automático garantido.", "evidence_ts": "00:02:20"},
+          {"decision": "Homologar Llama 3.2 3B e nomic-embed-text como modelos locais oficiais sem saída de dados para a nuvem.", "evidence_ts": "00:03:40"}
+        ],
+        "action_items": [
+          {"action": "Implementar rotina automatizada de expurgo de áudios antigos", "owner": "Renato", "deadline": "28/10/2026", "evidence": "00:05:00"},
+          {"action": "Conduzir treinamento de conformidade LGPD para a auditoria interna", "owner": "Mariana", "deadline": "30/11/2026", "evidence": "00:06:15"}
+        ]
+      }
+    },
+    {
+      "session_id": "2026-10-28_091500",
+      "title": "Arquitetura Técnica WASAPI e EchoGate",
+      "transcript": {
+        "text": "[00:00:10] [Thiago]: Reunião técnica de engenharia para definir os parâmetros de áudio e cancelamento acústico.\n[00:01:00] [Eduardo]: Para otimizar a velocidade de inferência do faster-whisper e reduzir o uso de RAM, definimos a taxa de amostragem em 16.000 Hz nativo.\n[00:02:15] [Fernanda]: Sobre o algoritmo EchoGate para cortar vazamento de som dos participantes, calibramos o limiar mínimo de correlação cruzada em 0.30.\n[00:03:30] [Thiago]: Com 0.30 o EchoGate preserva a voz simultânea do usuário com margem de 6 dB e elimina o eco dos alto-falantes perfeitamente.\n[00:04:45] [Fernanda]: Também constatamos que o Microphone Array Intel SST deve ser priorizado sobre a tomada jack analógica para evitar crosstalk elétrico.\n[00:05:40] [Eduardo]: Ficarei responsável por rodar a suíte completa de benchmarks de Real Time Factor e auditoria de RAM até 5 de novembro.\n[00:06:50] [Thiago]: Perfeito, especificações técnicas homologadas.",
+        "segments": [
+          {"speaker": "Thiago", "start": 10.0, "end": 40.0, "text": "Reunião técnica de engenharia para definir os parâmetros de áudio e cancelamento acústico."},
+          {"speaker": "Eduardo", "start": 60.0, "end": 110.0, "text": "Para otimizar a velocidade de inferência do faster-whisper e reduzir o uso de RAM, definimos a taxa de amostragem em 16.000 Hz nativo."},
+          {"speaker": "Fernanda", "start": 135.0, "end": 190.0, "text": "Sobre o algoritmo EchoGate para cortar vazamento de som dos participantes, calibramos o limiar mínimo de correlação cruzada em 0.30."},
+          {"speaker": "Thiago", "start": 210.0, "end": 260.0, "text": "Com 0.30 o EchoGate preserva a voz simultânea do usuário com margem de 6 dB e elimina o eco dos alto-falantes perfeitamente."},
+          {"speaker": "Fernanda", "start": 285.0, "end": 330.0, "text": "Também constatamos que o Microphone Array Intel SST deve ser priorizado sobre a tomada jack analógica para evitar crosstalk elétrico."},
+          {"speaker": "Eduardo", "start": 340.0, "end": 390.0, "text": "Ficarei responsável por rodar a suíte completa de benchmarks de Real Time Factor e auditoria de RAM até 5 de novembro."},
+          {"speaker": "Thiago", "start": 410.0, "end": 420.0, "text": "Perfeito, especificações técnicas homologadas."}
+        ]
+      },
+      "minutes": {
+        "title": "Ata Técnica: Engenharia de Áudio WASAPI",
+        "meeting_date": "28/10/2026 09:15",
+        "summary": "Definição de parâmetros acústicos: amostragem em 16kHz, limiar do EchoGate em 0.30 e prioridade ao Microphone Array Intel SST.",
+        "decisions": [
+          {"decision": "Adotar taxa nativa de 16.000 Hz para processamento direto sem resampling pesado.", "evidence_ts": "00:01:00"},
+          {"decision": "Calibrar limiar de correlação cruzada do EchoGate em 0.30 com margem de fala dupla em 6 dB.", "evidence_ts": "00:02:15"}
+        ],
+        "action_items": [
+          {"action": "Executar bateria de benchmarks de RTF e telemetria de RAM", "owner": "Eduardo", "deadline": "05/11/2026", "evidence": "00:05:40"}
+        ]
+      }
+    }
+  ],
+  "queries": [
+    {
+      "id": "q01",
+      "question": "O que ficou decidido sobre o prazo de entrega do projeto QCCP?",
+      "expected_found": true,
+      "session_id": "2026-10-15_100000",
+      "time_interval": [80.0, 195.0],
+      "expected_speakers": ["Beatriz", "Thiago", "Ata Executiva"],
+      "keywords": ["15 de dezembro", "dezembro", "prazo"]
+    },
+    {
+      "id": "q02",
+      "question": "Qual é o valor do orçamento aprovado para os servidores locais?",
+      "expected_found": true,
+      "session_id": "2026-10-15_100000",
+      "time_interval": [210.0, 340.0],
+      "expected_speakers": ["Carlos", "Beatriz", "Ata Executiva"],
+      "keywords": ["180.000", "180 mil"]
+    },
+    {
+      "id": "q03",
+      "question": "Quem ficou responsável pelo relatório de pentest e qual o prazo?",
+      "expected_found": true,
+      "session_id": "2026-10-15_100000",
+      "time_interval": [425.0, 480.0],
+      "expected_speakers": ["Carlos"],
+      "keywords": ["Carlos", "10 de novembro", "10/11"]
+    },
+    {
+      "id": "q04",
+      "question": "Quando foi agendada a homologação com a B3?",
+      "expected_found": true,
+      "session_id": "2026-10-15_100000",
+      "time_interval": [520.0, 570.0],
+      "expected_speakers": ["Beatriz"],
+      "keywords": ["20 de novembro", "20/11"]
+    },
+    {
+      "id": "q05",
+      "question": "Por quanto tempo os arquivos de áudio devem ser guardados antes do expurgo pela LGPD?",
+      "expected_found": true,
+      "session_id": "2026-10-22_143000",
+      "time_interval": [70.0, 200.0],
+      "expected_speakers": ["Renato", "Thiago", "Ata Executiva"],
+      "keywords": ["7 dias", "sete dias"]
+    },
+    {
+      "id": "q06",
+      "question": "Qual modelo de inteligência artificial foi ratificado para uso local?",
+      "expected_found": true,
+      "session_id": "2026-10-22_143000",
+      "time_interval": [220.0, 280.0],
+      "expected_speakers": ["Mariana", "Ata Executiva"],
+      "keywords": ["Llama 3.2 3B", "Llama"]
+    },
+    {
+      "id": "q07",
+      "question": "Quem vai implementar a rotina de expurgo automatizado de dados e qual a data limite?",
+      "expected_found": true,
+      "session_id": "2026-10-22_143000",
+      "time_interval": [300.0, 350.0],
+      "expected_speakers": ["Renato"],
+      "keywords": ["Renato", "28 de outubro", "28/10"]
+    },
+    {
+      "id": "q08",
+      "question": "Qual o prazo para Mariana realizar o treinamento de conformidade com a auditoria?",
+      "expected_found": true,
+      "session_id": "2026-10-22_143000",
+      "time_interval": [375.0, 430.0],
+      "expected_speakers": ["Mariana"],
+      "keywords": ["30 de novembro", "30/11"]
+    },
+    {
+      "id": "q09",
+      "question": "Qual a taxa de amostragem definida para o faster-whisper?",
+      "expected_found": true,
+      "session_id": "2026-10-28_091500",
+      "time_interval": [60.0, 110.0],
+      "expected_speakers": ["Eduardo", "Ata Executiva"],
+      "keywords": ["16.000 Hz", "16000", "16kHz"]
+    },
+    {
+      "id": "q10",
+      "question": "Qual o limiar de correlação cruzada ajustado no EchoGate?",
+      "expected_found": true,
+      "session_id": "2026-10-28_091500",
+      "time_interval": [135.0, 260.0],
+      "expected_speakers": ["Fernanda", "Thiago", "Ata Executiva"],
+      "keywords": ["0.30", "0,30"]
+    },
+    {
+      "id": "q11",
+      "question": "Por que o Microphone Array Intel SST foi priorizado em relação ao conector analógico?",
+      "expected_found": true,
+      "session_id": "2026-10-28_091500",
+      "time_interval": [285.0, 330.0],
+      "expected_speakers": ["Fernanda"],
+      "keywords": ["crosstalk", "elétrico", "tomada", "fone"]
+    },
+    {
+      "id": "q12",
+      "question": "Qual tarefa ficou com Eduardo e qual é o seu prazo?",
+      "expected_found": true,
+      "session_id": "2026-10-28_091500",
+      "time_interval": [340.0, 390.0],
+      "expected_speakers": ["Eduardo"],
+      "keywords": ["Eduardo", "benchmarks", "5 de novembro", "05/11"]
+    },
+    {
+      "id": "q13",
+      "question": "O que Carlos assumiu na reunião de 15 de outubro?",
+      "expected_found": true,
+      "session_id": "2026-10-15_100000",
+      "time_interval": [425.0, 480.0],
+      "expected_speakers": ["Carlos"],
+      "keywords": ["segurança", "pentest"]
+    },
+    {
+      "id": "q14",
+      "question": "Quem lidera o alinhamento de homologação com a B3?",
+      "expected_found": true,
+      "session_id": "2026-10-15_100000",
+      "time_interval": [520.0, 570.0],
+      "expected_speakers": ["Beatriz"],
+      "keywords": ["Beatriz"]
+    },
+    {
+      "id": "q15",
+      "question": "Qual a margem de energia para fala dupla no cancelamento de eco?",
+      "expected_found": true,
+      "session_id": "2026-10-28_091500",
+      "time_interval": [210.0, 260.0],
+      "expected_speakers": ["Thiago", "Ata Executiva"],
+      "keywords": ["6 dB", "6dB"]
+    },
+    {
+      "id": "q16",
+      "question": "Qual foi a receita líquida e faturamento trimestral divulgado pela empresa?",
+      "expected_found": false,
+      "session_id": null,
+      "time_interval": null,
+      "expected_speakers": [],
+      "keywords": []
+    },
+    {
+      "id": "q17",
+      "question": "Quem foi o fornecedor contratado para mobiliar a filial internacional de Lisboa?",
+      "expected_found": false,
+      "session_id": null,
+      "time_interval": null,
+      "expected_speakers": [],
+      "keywords": []
+    },
+    {
+      "id": "q18",
+      "question": "Qual foi a taxa Selic estimada pelo Banco Central mencionada nas pautas?",
+      "expected_found": false,
+      "session_id": null,
+      "time_interval": null,
+      "expected_speakers": [],
+      "keywords": []
+    },
+    {
+      "id": "q19",
+      "question": "Onde foi realizada a festa de confraternização de fim de ano dos funcionários?",
+      "expected_found": false,
+      "session_id": null,
+      "time_interval": null,
+      "expected_speakers": [],
+      "keywords": []
+    }
+  ]
+}

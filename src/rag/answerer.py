@@ -137,7 +137,8 @@ class RagAnswerer:
             "3. NUNCA invente fatos, reuniões ou prazos não presentes nas fontes.\n"
             "4. Se as fontes fornecidas NÃO tiverem informações suficientes para responder com certeza, retorne:\n"
             f"   'found': false e 'answer': '{NOT_FOUND_MESSAGE}'.\n"
-            "5. A resposta deve ser OBRIGATORIAMENTE um objeto JSON válido com o schema:\n"
+            "5. No campo 'citations', liste APENAS as fontes que você citou diretamente no texto de 'answer'. NÃO inclua fontes irrelevantes ou não utilizadas.\n"
+            "6. A resposta deve ser OBRIGATORIAMENTE um objeto JSON válido com o schema:\n"
             "   {\n"
             '     "answer": "Texto da resposta com citações [F1]...",\n'
             '     "citations": ["F1", "F2"],\n'
@@ -177,10 +178,15 @@ class RagAnswerer:
                     valid_citations.append(c_clean)
 
             # 2. Também detecta citações explícitas [F1] presentes no texto da resposta
+            text_citations = []
             for match in re.findall(r"\[F(\d+)\]", answer_text, re.IGNORECASE):
                 cid = f"F{match}"
-                if cid in source_map and cid not in valid_citations:
-                    valid_citations.append(cid)
+                if cid in source_map and cid not in text_citations:
+                    text_citations.append(cid)
+
+            # Se o texto da resposta tem citações explícitas, prioriza-as sobre a lista raw do JSON (evita over-citation de distratores)
+            if text_citations:
+                valid_citations = text_citations
 
             # Se encontrou mas o texto indica expressamente que não foi encontrado
             if NOT_FOUND_MESSAGE.lower() in answer_text.lower():
