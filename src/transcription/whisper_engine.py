@@ -4,12 +4,14 @@ Executa em CPU com quantização int8, seleção dinâmica de modelo por disponi
 de RAM e descarregamento ativo de memória imediatamente após o uso.
 """
 
+from __future__ import annotations
+
 import gc
 import os
 import psutil
 import logging
 from pathlib import Path
-from typing import List, Dict, Any, Optional, Union
+from typing import List, Dict, Any, Optional, Union, Callable
 import numpy as np
 
 from src.config import (
