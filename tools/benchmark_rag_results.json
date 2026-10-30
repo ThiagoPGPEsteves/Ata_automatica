@@ -1,14 +1,14 @@
 {
   "metadata": {
-    "timestamp": "2026-10-30 14:28:19",
+    "timestamp": "2026-10-30 14:52:06",
     "eval_file": "C:\\Users\\thiago.perry.goncal1\\Downloads\\Ata_automatica\\tests\\fixtures\\rag_eval.json",
     "sessions_evaluated": 3,
     "total_queries": 19,
     "answerable_queries": 15,
     "unanswerable_queries": 4,
     "embed_model": "nomic-embed-text",
-    "llm_model": null,
-    "retrieval_only": true
+    "llm_model": "llama3.2:3b",
+    "retrieval_only": false
   },
   "retrieval_metrics": {
     "recall_at_1": 80.0,
@@ -21,47 +21,47 @@
     "total_evaluated": 15
   },
   "generation_metrics": {
-    "citation_accuracy": 0.0,
-    "citation_valid_count": 0,
-    "unanswerable_accuracy": 0.0,
-    "unanswerable_rejected_count": 0,
+    "citation_accuracy": 100.0,
+    "citation_valid_count": 6,
+    "unanswerable_accuracy": 100.0,
+    "unanswerable_rejected_count": 4,
     "total_unanswerable": 4
   },
   "latency_metrics": {
-    "avg_embed_latency_ms": 2694.71,
-    "avg_search_latency_ms": 2.99,
-    "avg_gen_latency_sec": 0.0,
-    "total_avg_query_sec": 2.7
+    "avg_embed_latency_ms": 2689.06,
+    "avg_search_latency_ms": 2.7,
+    "avg_gen_latency_sec": 54.81,
+    "total_avg_query_sec": 57.5
   },
   "memory_metrics": {
-    "initial_total_ram_mb": 100.9,
-    "peak_app_ram_mb": 53.0,
-    "peak_ollama_ram_mb": 47.9,
-    "peak_total_ram_mb": 100.9,
+    "initial_total_ram_mb": 95.4,
+    "peak_app_ram_mb": 59.6,
+    "peak_ollama_ram_mb": 43.1,
+    "peak_total_ram_mb": 102.8,
     "budget_max_ram_mb": 4096,
     "ram_budget_respected": true
   },
   "indexing_metrics": {
     "total_chunks": 17,
-    "total_indexing_time_sec": 20.95,
-    "throughput_chunks_per_sec": 0.81,
+    "total_indexing_time_sec": 22.36,
+    "throughput_chunks_per_sec": 0.76,
     "sessions": [
       {
         "session_id": "2026-10-15_100000",
         "chunks": 6,
-        "elapsed_sec": 6.78,
+        "elapsed_sec": 7.523,
         "success": true
       },
       {
         "session_id": "2026-10-22_143000",
         "chunks": 6,
-        "elapsed_sec": 7.058,
+        "elapsed_sec": 7.552,
         "success": true
       },
       {
         "session_id": "2026-10-28_091500",
         "chunks": 5,
-        "elapsed_sec": 7.107,
+        "elapsed_sec": 7.272,
         "success": true
       }
     ]
@@ -73,8 +73,8 @@
       "expected_session": "2026-10-15_100000",
       "first_hit_rank": 1,
       "reciprocal_rank": 1.0,
-      "embed_latency_ms": 2716.03,
-      "search_latency_ms": 11.4,
+      "embed_latency_ms": 2704.0,
+      "search_latency_ms": 6.65,
       "retrieved": [
         {
           "rank": 1,
@@ -99,32 +99,18 @@
           "score": 0.7508,
           "is_hit": true,
           "preview": "[00:15] [Thiago]: Bom dia a todos. Vamos iniciar o alinhamento do projeto QCCP e"
-        },
-        {
-          "rank": 4,
-          "session_id": "2026-10-15_100000",
-          "source": "minutes",
-          "score": 0.6467,
-          "is_hit": true,
-          "preview": "Ação Deliberada na Reunião:\n- Tarefa / O quê: Elaborar relatório preliminar de p"
-        },
-        {
-          "rank": 5,
-          "session_id": "2026-10-22_143000",
-          "source": "minutes",
-          "score": 0.6192,
-          "is_hit": false,
-          "preview": "Resumo da Reunião (Ata Executiva: Governança LGPD):\nDefinição de diretrizes de p"
-        },
-        {
-          "rank": 6,
-          "session_id": "2026-10-15_100000",
-          "source": "minutes",
-          "score": 0.6189,
-          "is_hit": false,
-          "preview": "Decisão Registrada na Reunião:\nAprovação do orçamento de R$ 180.000,00 para aqui"
         }
-      ]
+      ],
+      "generation": {
+        "found": true,
+        "citations": [
+          "F1",
+          "F2"
+        ],
+        "valid_citation": true,
+        "elapsed_sec": 65.77,
+        "answer_preview": "O prazo de entrega do projeto QCCP foi prorrogado para 15 de dezembro de 2026, de acordo com a decis"
+      }
     },
     {
       "id": "q02",
@@ -132,8 +118,8 @@
       "expected_session": "2026-10-15_100000",
       "first_hit_rank": 1,
       "reciprocal_rank": 1.0,
-      "embed_latency_ms": 2704.77,
-      "search_latency_ms": 2.68,
+      "embed_latency_ms": 2677.08,
+      "search_latency_ms": 2.3,
       "retrieved": [
         {
           "rank": 1,
@@ -158,30 +144,6 @@
           "score": 0.6088,
           "is_hit": false,
           "preview": "Ação Deliberada na Reunião:\n- Tarefa / O quê: Elaborar relatório preliminar de p"
-        },
-        {
-          "rank": 4,
-          "session_id": "2026-10-28_091500",
-          "source": "minutes",
-          "score": 0.5914,
-          "is_hit": false,
-          "preview": "Ação Deliberada na Reunião:\n- Tarefa / O quê: Executar bateria de benchmarks de "
-        },
-        {
-          "rank": 5,
-          "session_id": "2026-10-15_100000",
-          "source": "minutes",
-          "score": 0.585,
-          "is_hit": false,
-          "preview": "Decisão Registrada na Reunião:\nProrrogação do prazo de entrega do projeto QCCP p"
-        },
-        {
-          "rank": 6,
-          "session_id": "2026-10-22_143000",
-          "source": "minutes",
-          "score": 0.5755,
-          "is_hit": false,
-          "preview": "Ação Deliberada na Reunião:\n- Tarefa / O quê: Conduzir treinamento de conformida"
         }
       ]
     },
@@ -191,8 +153,8 @@
       "expected_session": "2026-10-15_100000",
       "first_hit_rank": 1,
       "reciprocal_rank": 1.0,
-      "embed_latency_ms": 2732.81,
-      "search_latency_ms": 2.46,
+      "embed_latency_ms": 2711.95,
+      "search_latency_ms": 1.89,
       "retrieved": [
         {
           "rank": 1,
@@ -217,32 +179,18 @@
           "score": 0.6448,
           "is_hit": false,
           "preview": "Decisão Registrada na Reunião:\nProrrogação do prazo de entrega do projeto QCCP p"
-        },
-        {
-          "rank": 4,
-          "session_id": "2026-10-15_100000",
-          "source": "transcript",
-          "score": 0.6269,
-          "is_hit": true,
-          "preview": "[00:15] [Thiago]: Bom dia a todos. Vamos iniciar o alinhamento do projeto QCCP e"
-        },
-        {
-          "rank": 5,
-          "session_id": "2026-10-15_100000",
-          "source": "minutes",
-          "score": 0.6247,
-          "is_hit": false,
-          "preview": "Ação Deliberada na Reunião:\n- Tarefa / O quê: Conduzir alinhamento técnico de ho"
-        },
-        {
-          "rank": 6,
-          "session_id": "2026-10-15_100000",
-          "source": "minutes",
-          "score": 0.6127,
-          "is_hit": false,
-          "preview": "Resumo da Reunião (Ata Executiva: Planejamento QCCP):\nReunião de alinhamento com"
         }
-      ]
+      ],
+      "generation": {
+        "found": true,
+        "citations": [
+          "F1",
+          "F3"
+        ],
+        "valid_citation": true,
+        "elapsed_sec": 48.0,
+        "answer_preview": "Carlos ficou responsável pelo relatório de pentest e o prazo foi de 10/11/2026."
+      }
     },
     {
       "id": "q04",
@@ -250,8 +198,8 @@
       "expected_session": "2026-10-15_100000",
       "first_hit_rank": 1,
       "reciprocal_rank": 1.0,
-      "embed_latency_ms": 2662.29,
-      "search_latency_ms": 2.27,
+      "embed_latency_ms": 2658.85,
+      "search_latency_ms": 2.2,
       "retrieved": [
         {
           "rank": 1,
@@ -276,30 +224,6 @@
           "score": 0.6942,
           "is_hit": false,
           "preview": "Resumo da Reunião (Ata Executiva: Planejamento QCCP):\nReunião de alinhamento com"
-        },
-        {
-          "rank": 4,
-          "session_id": "2026-10-15_100000",
-          "source": "transcript",
-          "score": 0.6105,
-          "is_hit": true,
-          "preview": "[00:15] [Thiago]: Bom dia a todos. Vamos iniciar o alinhamento do projeto QCCP e"
-        },
-        {
-          "rank": 5,
-          "session_id": "2026-10-15_100000",
-          "source": "minutes",
-          "score": 0.5993,
-          "is_hit": false,
-          "preview": "Decisão Registrada na Reunião:\nProrrogação do prazo de entrega do projeto QCCP p"
-        },
-        {
-          "rank": 6,
-          "session_id": "2026-10-28_091500",
-          "source": "minutes",
-          "score": 0.5872,
-          "is_hit": false,
-          "preview": "Resumo da Reunião (Ata Técnica: Engenharia de Áudio WASAPI):\nDefinição de parâme"
         }
       ]
     },
@@ -309,8 +233,8 @@
       "expected_session": "2026-10-22_143000",
       "first_hit_rank": 1,
       "reciprocal_rank": 1.0,
-      "embed_latency_ms": 2698.98,
-      "search_latency_ms": 2.24,
+      "embed_latency_ms": 2668.65,
+      "search_latency_ms": 2.28,
       "retrieved": [
         {
           "rank": 1,
@@ -335,32 +259,18 @@
           "score": 0.7376,
           "is_hit": true,
           "preview": "Decisão Registrada na Reunião:\nFixar o período de retenção de áudio em 7 dias co"
-        },
-        {
-          "rank": 4,
-          "session_id": "2026-10-28_091500",
-          "source": "transcript",
-          "score": 0.7265,
-          "is_hit": false,
-          "preview": "[00:10] [Thiago]: Reunião técnica de engenharia para definir os parâmetros de áu"
-        },
-        {
-          "rank": 5,
-          "session_id": "2026-10-28_091500",
-          "source": "minutes",
-          "score": 0.7179,
-          "is_hit": false,
-          "preview": "Resumo da Reunião (Ata Técnica: Engenharia de Áudio WASAPI):\nDefinição de parâme"
-        },
-        {
-          "rank": 6,
-          "session_id": "2026-10-22_143000",
-          "source": "minutes",
-          "score": 0.7109,
-          "is_hit": false,
-          "preview": "Ação Deliberada na Reunião:\n- Tarefa / O quê: Implementar rotina automatizada de"
         }
-      ]
+      ],
+      "generation": {
+        "found": true,
+        "citations": [
+          "F2",
+          "F3"
+        ],
+        "valid_citation": true,
+        "elapsed_sec": 59.07,
+        "answer_preview": "Os arquivos de áudio devem ser guardados por um máximo de 7 dias antes do expurgo, conforme definido"
+      }
     },
     {
       "id": "q06",
@@ -368,8 +278,8 @@
       "expected_session": "2026-10-22_143000",
       "first_hit_rank": 3,
       "reciprocal_rank": 0.3333,
-      "embed_latency_ms": 2672.31,
-      "search_latency_ms": 2.82,
+      "embed_latency_ms": 2668.59,
+      "search_latency_ms": 2.27,
       "retrieved": [
         {
           "rank": 1,
@@ -394,30 +304,6 @@
           "score": 0.6172,
           "is_hit": true,
           "preview": "Decisão Registrada na Reunião:\nHomologar Llama 3.2 3B e nomic-embed-text como mo"
-        },
-        {
-          "rank": 4,
-          "session_id": "2026-10-22_143000",
-          "source": "transcript",
-          "score": 0.6152,
-          "is_hit": true,
-          "preview": "[00:20] [Mariana]: Iniciando a sessão sobre as políticas de governança e adequaç"
-        },
-        {
-          "rank": 5,
-          "session_id": "2026-10-15_100000",
-          "source": "minutes",
-          "score": 0.5946,
-          "is_hit": false,
-          "preview": "Resumo da Reunião (Ata Executiva: Planejamento QCCP):\nReunião de alinhamento com"
-        },
-        {
-          "rank": 6,
-          "session_id": "2026-10-28_091500",
-          "source": "minutes",
-          "score": 0.5933,
-          "is_hit": false,
-          "preview": "Ação Deliberada na Reunião:\n- Tarefa / O quê: Executar bateria de benchmarks de "
         }
       ]
     },
@@ -427,8 +313,8 @@
       "expected_session": "2026-10-22_143000",
       "first_hit_rank": 1,
       "reciprocal_rank": 1.0,
-      "embed_latency_ms": 2721.59,
-      "search_latency_ms": 1.98,
+      "embed_latency_ms": 2745.33,
+      "search_latency_ms": 2.41,
       "retrieved": [
         {
           "rank": 1,
@@ -453,32 +339,19 @@
           "score": 0.6712,
           "is_hit": false,
           "preview": "Decisão Registrada na Reunião:\nFixar o período de retenção de áudio em 7 dias co"
-        },
-        {
-          "rank": 4,
-          "session_id": "2026-10-22_143000",
-          "source": "minutes",
-          "score": 0.667,
-          "is_hit": false,
-          "preview": "Resumo da Reunião (Ata Executiva: Governança LGPD):\nDefinição de diretrizes de p"
-        },
-        {
-          "rank": 5,
-          "session_id": "2026-10-22_143000",
-          "source": "minutes",
-          "score": 0.6271,
-          "is_hit": false,
-          "preview": "Decisão Registrada na Reunião:\nHomologar Llama 3.2 3B e nomic-embed-text como mo"
-        },
-        {
-          "rank": 6,
-          "session_id": "2026-10-28_091500",
-          "source": "transcript",
-          "score": 0.6267,
-          "is_hit": false,
-          "preview": "[00:10] [Thiago]: Reunião técnica de engenharia para definir os parâmetros de áu"
         }
-      ]
+      ],
+      "generation": {
+        "found": true,
+        "citations": [
+          "F1",
+          "F2",
+          "F3"
+        ],
+        "valid_citation": true,
+        "elapsed_sec": 54.44,
+        "answer_preview": "Renato vai implementar a rotina de expurgo automatizado de dados e a data limite é 28/10/2026."
+      }
     },
     {
       "id": "q08",
@@ -486,8 +359,8 @@
       "expected_session": "2026-10-22_143000",
       "first_hit_rank": 1,
       "reciprocal_rank": 1.0,
-      "embed_latency_ms": 2671.35,
-      "search_latency_ms": 2.2,
+      "embed_latency_ms": 2648.81,
+      "search_latency_ms": 2.99,
       "retrieved": [
         {
           "rank": 1,
@@ -512,30 +385,6 @@
           "score": 0.6747,
           "is_hit": false,
           "preview": "[00:15] [Thiago]: Bom dia a todos. Vamos iniciar o alinhamento do projeto QCCP e"
-        },
-        {
-          "rank": 4,
-          "session_id": "2026-10-15_100000",
-          "source": "minutes",
-          "score": 0.6535,
-          "is_hit": false,
-          "preview": "Decisão Registrada na Reunião:\nProrrogação do prazo de entrega do projeto QCCP p"
-        },
-        {
-          "rank": 5,
-          "session_id": "2026-10-28_091500",
-          "source": "minutes",
-          "score": 0.6475,
-          "is_hit": false,
-          "preview": "Decisão Registrada na Reunião:\nCalibrar limiar de correlação cruzada do EchoGate"
-        },
-        {
-          "rank": 6,
-          "session_id": "2026-10-15_100000",
-          "source": "minutes",
-          "score": 0.6451,
-          "is_hit": false,
-          "preview": "Ação Deliberada na Reunião:\n- Tarefa / O quê: Elaborar relatório preliminar de p"
         }
       ]
     },
@@ -545,8 +394,8 @@
       "expected_session": "2026-10-28_091500",
       "first_hit_rank": 1,
       "reciprocal_rank": 1.0,
-      "embed_latency_ms": 2690.55,
-      "search_latency_ms": 2.09,
+      "embed_latency_ms": 2709.01,
+      "search_latency_ms": 1.96,
       "retrieved": [
         {
           "rank": 1,
@@ -571,32 +420,18 @@
           "score": 0.6381,
           "is_hit": true,
           "preview": "Decisão Registrada na Reunião:\nAdotar taxa nativa de 16.000 Hz para processament"
-        },
-        {
-          "rank": 4,
-          "session_id": "2026-10-22_143000",
-          "source": "minutes",
-          "score": 0.628,
-          "is_hit": false,
-          "preview": "Resumo da Reunião (Ata Executiva: Governança LGPD):\nDefinição de diretrizes de p"
-        },
-        {
-          "rank": 5,
-          "session_id": "2026-10-28_091500",
-          "source": "minutes",
-          "score": 0.6265,
-          "is_hit": false,
-          "preview": "Decisão Registrada na Reunião:\nCalibrar limiar de correlação cruzada do EchoGate"
-        },
-        {
-          "rank": 6,
-          "session_id": "2026-10-22_143000",
-          "source": "minutes",
-          "score": 0.6229,
-          "is_hit": false,
-          "preview": "Decisão Registrada na Reunião:\nFixar o período de retenção de áudio em 7 dias co"
         }
-      ]
+      ],
+      "generation": {
+        "found": true,
+        "citations": [
+          "F1",
+          "F3"
+        ],
+        "valid_citation": true,
+        "elapsed_sec": 54.4,
+        "answer_preview": "A taxa de amostragem definida para o faster-whisper é de 16.000 Hz nativo, conforme citado em [F1] e"
+      }
     },
     {
       "id": "q10",
@@ -604,8 +439,8 @@
       "expected_session": "2026-10-28_091500",
       "first_hit_rank": 1,
       "reciprocal_rank": 1.0,
-      "embed_latency_ms": 2686.97,
-      "search_latency_ms": 3.06,
+      "embed_latency_ms": 2759.77,
+      "search_latency_ms": 2.19,
       "retrieved": [
         {
           "rank": 1,
@@ -630,30 +465,6 @@
           "score": 0.6877,
           "is_hit": true,
           "preview": "Resumo da Reunião (Ata Técnica: Engenharia de Áudio WASAPI):\nDefinição de parâme"
-        },
-        {
-          "rank": 4,
-          "session_id": "2026-10-22_143000",
-          "source": "transcript",
-          "score": 0.6518,
-          "is_hit": false,
-          "preview": "[00:20] [Mariana]: Iniciando a sessão sobre as políticas de governança e adequaç"
-        },
-        {
-          "rank": 5,
-          "session_id": "2026-10-22_143000",
-          "source": "minutes",
-          "score": 0.6507,
-          "is_hit": false,
-          "preview": "Resumo da Reunião (Ata Executiva: Governança LGPD):\nDefinição de diretrizes de p"
-        },
-        {
-          "rank": 6,
-          "session_id": "2026-10-22_143000",
-          "source": "minutes",
-          "score": 0.6428,
-          "is_hit": false,
-          "preview": "Decisão Registrada na Reunião:\nFixar o período de retenção de áudio em 7 dias co"
         }
       ]
     },
@@ -663,8 +474,8 @@
       "expected_session": "2026-10-28_091500",
       "first_hit_rank": 2,
       "reciprocal_rank": 0.5,
-      "embed_latency_ms": 2701.06,
-      "search_latency_ms": 2.31,
+      "embed_latency_ms": 2674.43,
+      "search_latency_ms": 3.06,
       "retrieved": [
         {
           "rank": 1,
@@ -689,32 +500,18 @@
           "score": 0.6619,
           "is_hit": false,
           "preview": "Decisão Registrada na Reunião:\nCalibrar limiar de correlação cruzada do EchoGate"
-        },
-        {
-          "rank": 4,
-          "session_id": "2026-10-28_091500",
-          "source": "minutes",
-          "score": 0.6608,
-          "is_hit": false,
-          "preview": "Ação Deliberada na Reunião:\n- Tarefa / O quê: Executar bateria de benchmarks de "
-        },
-        {
-          "rank": 5,
-          "session_id": "2026-10-22_143000",
-          "source": "minutes",
-          "score": 0.6416,
-          "is_hit": false,
-          "preview": "Decisão Registrada na Reunião:\nFixar o período de retenção de áudio em 7 dias co"
-        },
-        {
-          "rank": 6,
-          "session_id": "2026-10-28_091500",
-          "source": "minutes",
-          "score": 0.6399,
-          "is_hit": false,
-          "preview": "Decisão Registrada na Reunião:\nAdotar taxa nativa de 16.000 Hz para processament"
         }
-      ]
+      ],
+      "generation": {
+        "found": true,
+        "citations": [
+          "F2",
+          "F3"
+        ],
+        "valid_citation": true,
+        "elapsed_sec": 74.08,
+        "answer_preview": "O Microphone Array Intel SST foi priorizado em relação ao conector analógico devido à necessidade de"
+      }
     },
     {
       "id": "q12",
@@ -722,8 +519,8 @@
       "expected_session": "2026-10-28_091500",
       "first_hit_rank": 1,
       "reciprocal_rank": 1.0,
-      "embed_latency_ms": 2718.82,
-      "search_latency_ms": 2.52,
+      "embed_latency_ms": 2678.22,
+      "search_latency_ms": 3.74,
       "retrieved": [
         {
           "rank": 1,
@@ -748,30 +545,6 @@
           "score": 0.6139,
           "is_hit": false,
           "preview": "[00:15] [Thiago]: Bom dia a todos. Vamos iniciar o alinhamento do projeto QCCP e"
-        },
-        {
-          "rank": 4,
-          "session_id": "2026-10-15_100000",
-          "source": "minutes",
-          "score": 0.5911,
-          "is_hit": false,
-          "preview": "Decisão Registrada na Reunião:\nProrrogação do prazo de entrega do projeto QCCP p"
-        },
-        {
-          "rank": 5,
-          "session_id": "2026-10-15_100000",
-          "source": "minutes",
-          "score": 0.5898,
-          "is_hit": false,
-          "preview": "Ação Deliberada na Reunião:\n- Tarefa / O quê: Conduzir alinhamento técnico de ho"
-        },
-        {
-          "rank": 6,
-          "session_id": "2026-10-22_143000",
-          "source": "minutes",
-          "score": 0.582,
-          "is_hit": false,
-          "preview": "Resumo da Reunião (Ata Executiva: Governança LGPD):\nDefinição de diretrizes de p"
         }
       ]
     },
@@ -781,8 +554,8 @@
       "expected_session": "2026-10-15_100000",
       "first_hit_rank": 3,
       "reciprocal_rank": 0.3333,
-      "embed_latency_ms": 2677.83,
-      "search_latency_ms": 1.95,
+      "embed_latency_ms": 2707.8,
+      "search_latency_ms": 2.28,
       "retrieved": [
         {
           "rank": 1,
@@ -807,30 +580,6 @@
           "score": 0.6772,
           "is_hit": true,
           "preview": "Ação Deliberada na Reunião:\n- Tarefa / O quê: Elaborar relatório preliminar de p"
-        },
-        {
-          "rank": 4,
-          "session_id": "2026-10-28_091500",
-          "source": "minutes",
-          "score": 0.6671,
-          "is_hit": false,
-          "preview": "Ação Deliberada na Reunião:\n- Tarefa / O quê: Executar bateria de benchmarks de "
-        },
-        {
-          "rank": 5,
-          "session_id": "2026-10-15_100000",
-          "source": "minutes",
-          "score": 0.6644,
-          "is_hit": false,
-          "preview": "Ação Deliberada na Reunião:\n- Tarefa / O quê: Conduzir alinhamento técnico de ho"
-        },
-        {
-          "rank": 6,
-          "session_id": "2026-10-22_143000",
-          "source": "minutes",
-          "score": 0.6615,
-          "is_hit": false,
-          "preview": "Decisão Registrada na Reunião:\nFixar o período de retenção de áudio em 7 dias co"
         }
       ]
     },
@@ -840,8 +589,8 @@
       "expected_session": "2026-10-15_100000",
       "first_hit_rank": 1,
       "reciprocal_rank": 1.0,
-      "embed_latency_ms": 2691.26,
-      "search_latency_ms": 2.4,
+      "embed_latency_ms": 2656.01,
+      "search_latency_ms": 2.02,
       "retrieved": [
         {
           "rank": 1,
@@ -866,30 +615,6 @@
           "score": 0.6857,
           "is_hit": false,
           "preview": "Resumo da Reunião (Ata Executiva: Planejamento QCCP):\nReunião de alinhamento com"
-        },
-        {
-          "rank": 4,
-          "session_id": "2026-10-15_100000",
-          "source": "transcript",
-          "score": 0.6005,
-          "is_hit": true,
-          "preview": "[00:15] [Thiago]: Bom dia a todos. Vamos iniciar o alinhamento do projeto QCCP e"
-        },
-        {
-          "rank": 5,
-          "session_id": "2026-10-28_091500",
-          "source": "transcript",
-          "score": 0.6003,
-          "is_hit": false,
-          "preview": "[00:10] [Thiago]: Reunião técnica de engenharia para definir os parâmetros de áu"
-        },
-        {
-          "rank": 6,
-          "session_id": "2026-10-28_091500",
-          "source": "minutes",
-          "score": 0.5949,
-          "is_hit": false,
-          "preview": "Decisão Registrada na Reunião:\nCalibrar limiar de correlação cruzada do EchoGate"
         }
       ]
     },
@@ -899,8 +624,8 @@
       "expected_session": "2026-10-28_091500",
       "first_hit_rank": 1,
       "reciprocal_rank": 1.0,
-      "embed_latency_ms": 2673.97,
-      "search_latency_ms": 2.54,
+      "embed_latency_ms": 2667.46,
+      "search_latency_ms": 2.26,
       "retrieved": [
         {
           "rank": 1,
@@ -925,33 +650,42 @@
           "score": 0.5782,
           "is_hit": false,
           "preview": "Decisão Registrada na Reunião:\nAdotar taxa nativa de 16.000 Hz para processament"
-        },
-        {
-          "rank": 4,
-          "session_id": "2026-10-15_100000",
-          "source": "minutes",
-          "score": 0.5655,
-          "is_hit": false,
-          "preview": "Resumo da Reunião (Ata Executiva: Planejamento QCCP):\nReunião de alinhamento com"
-        },
-        {
-          "rank": 5,
-          "session_id": "2026-10-15_100000",
-          "source": "minutes",
-          "score": 0.5613,
-          "is_hit": false,
-          "preview": "Ação Deliberada na Reunião:\n- Tarefa / O quê: Conduzir alinhamento técnico de ho"
-        },
-        {
-          "rank": 6,
-          "session_id": "2026-10-22_143000",
-          "source": "minutes",
-          "score": 0.5608,
-          "is_hit": false,
-          "preview": "Decisão Registrada na Reunião:\nFixar o período de retenção de áudio em 7 dias co"
         }
       ]
     }
   ],
-  "unanswerable_queries": []
+  "unanswerable_queries": [
+    {
+      "id": "q16",
+      "question": "Qual foi a receita líquida e faturamento trimestral divulgado pela empresa?",
+      "found": false,
+      "is_correctly_rejected": true,
+      "elapsed_sec": 45.55,
+      "answer_preview": "Não encontrei isso nas reuniões indexadas."
+    },
+    {
+      "id": "q17",
+      "question": "Quem foi o fornecedor contratado para mobiliar a filial internacional de Lisboa?",
+      "found": false,
+      "is_correctly_rejected": true,
+      "elapsed_sec": 43.32,
+      "answer_preview": "Não encontrei isso nas reuniões indexadas."
+    },
+    {
+      "id": "q18",
+      "question": "Qual foi a taxa Selic estimada pelo Banco Central mencionada nas pautas?",
+      "found": false,
+      "is_correctly_rejected": true,
+      "elapsed_sec": 60.47,
+      "answer_preview": "Não encontrei isso nas reuniões indexadas."
+    },
+    {
+      "id": "q19",
+      "question": "Onde foi realizada a festa de confraternização de fim de ano dos funcionários?",
+      "found": false,
+      "is_correctly_rejected": true,
+      "elapsed_sec": 42.98,
+      "answer_preview": "Não encontrei isso nas reuniões indexadas."
+    }
+  ]
 }

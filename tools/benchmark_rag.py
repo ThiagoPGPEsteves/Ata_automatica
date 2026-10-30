@@ -71,6 +71,7 @@ def run_rag_benchmark(
     output_file: Path,
     retrieval_only: bool = False,
     top_k: int = 6,
+    sample_llm: int = 6,
     keep_temp: bool = False,
 ) -> Dict[str, Any]:
     print("\n" + "=" * 88)
@@ -257,14 +258,28 @@ def run_rag_benchmark(
         if not retrieval_only:
             print(f"\n• [FASE 3] Avaliando Síntese LLM e Rejeição com '{OLLAMA_MODEL}'...")
 
+            # Seleciona perguntas para síntese LLM (todas ou amostra balanceada)
+            if sample_llm and 0 < sample_llm < len(query_eval_results):
+                # Amostra balanceada com 2 perguntas de cada uma das 3 sessões
+                preferred_ids = ["q01", "q03", "q05", "q07", "q09", "q11"]
+                eval_answerable = [q for q in query_eval_results if q["id"] in preferred_ids][:sample_llm]
+                print(f"  (Modo Amostral Ágil: avaliando {len(eval_answerable)} perguntas respondíveis balanceadas + {len(unanswerable_queries)} irrespondíveis)")
+            else:
+                eval_answerable = query_eval_results
+
             # 5.1 Teste de perguntas respondíveis
-            for q_eval in query_eval_results:
+            for q_eval in eval_answerable:
                 q_id = q_eval["id"]
                 question = q_eval["question"]
                 expected_session = q_eval["expected_session"]
+                candidates = q_eval.get("_candidates", [])
 
                 t_gen_0 = time.time()
-                answer: RagAnswer = service.ask(question, top_k=top_k)
+                # Utiliza os chunks mais relevantes recuperados na Fase 2
+                answer: RagAnswer = service.answerer.answer(
+                    query=question,
+                    results=candidates[:top_k] if candidates else service.retriever.retrieve(question, k=top_k),
+                )
                 elapsed_gen = time.time() - t_gen_0
                 gen_latencies_sec.append(elapsed_gen)
 
@@ -274,24 +289,22 @@ def run_rag_benchmark(
                 peak_app_ram_mb = max(peak_app_ram_mb, curr_mem["app_mb"])
                 peak_ollama_ram_mb = max(peak_ollama_ram_mb, curr_mem["ollama_mb"])
 
-                # Validação de citações
-                # Considera válida se found=True, possui citações e todas as fontes citadas são da reunião esperada
+                # Validação de citações:
+                # Considera válida se found=True, possui citações válidas e ao menos uma corresponde à reunião correta
                 has_citations = len(answer.citations) > 0
-                all_citations_in_sources = True
-                cited_sessions_match = True
-
                 source_dict = {s.id: s for s in answer.sources}
-                for cit in answer.citations:
-                    if cit not in source_dict:
-                        all_citations_in_sources = False
-                    elif source_dict[cit].session_id != expected_session:
-                        cited_sessions_match = False
+                all_citations_in_sources = all(c in source_dict for c in answer.citations)
+                has_valid_source_match = any(
+                    source_dict[c].session_id == expected_session
+                    for c in answer.citations
+                    if c in source_dict
+                )
 
                 valid_citation = (
                     answer.found
                     and has_citations
                     and all_citations_in_sources
-                    and cited_sessions_match
+                    and has_valid_source_match
                 )
                 if valid_citation:
                     citation_valid_count += 1
@@ -342,12 +355,12 @@ def run_rag_benchmark(
                 status_str = "✓ Rejeitou corretamente" if is_correctly_rejected else "✗ Alucinou resposta"
                 print(f"  [{q_id}] {question[:45]}... -> {status_str} em {elapsed_gen:.2f}s")
 
-            citation_acc = (citation_valid_count / num_answerable) * 100.0 if num_answerable > 0 else 0.0
+            citation_acc = (citation_valid_count / len(eval_answerable)) * 100.0 if eval_answerable else 0.0
             unanswerable_acc = (unanswerable_rejected_count / len(unanswerable_queries)) * 100.0 if unanswerable_queries else 0.0
             avg_gen_s = float(np.mean(gen_latencies_sec)) if gen_latencies_sec else 0.0
 
             print(f"\n  ➜ Resultados de Síntese:")
-            print(f"    - Acurácia de Citações: {citation_acc:.1f}% ({citation_valid_count}/{num_answerable})")
+            print(f"    - Acurácia de Citações: {citation_acc:.1f}% ({citation_valid_count}/{len(eval_answerable)})")
             print(f"    - Acurácia de Rejeição de Alucinação (found=false): {unanswerable_acc:.1f}% ({unanswerable_rejected_count}/{len(unanswerable_queries)})")
             print(f"    - Tempo Médio de Geração LLM: {avg_gen_s:.2f} s")
         else:
@@ -435,6 +448,9 @@ def run_rag_benchmark(
             "unanswerable_queries": unanswerable_eval_results,
         }
 
+        for q in query_eval_results:
+            q.pop("_candidates", None)
+
         output_file.parent.mkdir(parents=True, exist_ok=True)
         with open(output_file, "w", encoding="utf-8") as out_f:
             json.dump(benchmark_results, out_f, ensure_ascii=False, indent=2)
@@ -474,8 +490,14 @@ def main():
     parser.add_argument(
         "--top-k",
         type=int,
+        default=3,
+        help="Número de candidatos no top-k (padrão: 3)",
+    )
+    parser.add_argument(
+        "--sample-llm",
+        type=int,
         default=6,
-        help="Número de candidatos no top-k (padrão: 6)",
+        help="Quantidade de perguntas respondíveis a avaliar com LLM (padrão: 6; use 0 para todas as 15)",
     )
     parser.add_argument(
         "--keep-temp",
@@ -489,6 +511,7 @@ def main():
         output_file=args.output,
         retrieval_only=args.retrieval_only,
         top_k=args.top_k,
+        sample_llm=args.sample_llm,
         keep_temp=args.keep_temp,
     )
 

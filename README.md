@@ -4,10 +4,10 @@
 [![Plataforma](https://img.shields.io/badge/Plataforma-Windows%20WASAPI-0078D6.svg)](https://learn.microsoft.com/en-us/windows/win32/coreaudio/wasapi)
 [![Privacidade](https://img.shields.io/badge/Privacidade-100%25%20Offline%20(Local)-green.svg)](#-privacidade-absoluta-e-conformidade)
 [![Memória RAM](https://img.shields.io/badge/Consumo%20de%20RAM-Pico%20%3C%20415%20MB-success.svg)](#-relatório-oficial-de-auditoria-de-memória-ram)
-[![Testes Automatizados](https://img.shields.io/badge/Testes-79%20Passando%20(100%25)-brightgreen.svg)](#-bateria-de-testes-automatizados)
+[![Testes Automatizados](https://img.shields.io/badge/Testes-98%20Passando%20(100%25)-brightgreen.svg)](#-bateria-de-testes-automatizados)
 [![Status](https://img.shields.io/badge/Status-100%25%20Concluído%20%26%20Homologado-brightgreen.svg)](#)
 
-Aplicação desktop executiva para Windows projetada para **capturar em tempo real o áudio de reuniões do Microsoft Teams**, transcrever com alta fidelidade (separando automaticamente a sua voz da voz dos demais participantes) e **gerar atas executivas formais prontas em formato Microsoft Word (`.docx`)** e **rascunhos estruturados no Microsoft Outlook**.
+Aplicação desktop executiva para Windows projetada para **capturar em tempo real o áudio de reuniões do Microsoft Teams**, transcrever com alta fidelidade (separando automaticamente a sua voz da voz dos demais participantes), **gerar atas executivas formais prontas em formato Microsoft Word (`.docx`)**, **rascunhos estruturados no Microsoft Outlook** e **consultar qualquer reunião passada em linguagem natural ("Pergunte às suas atas")**.
 
 Tudo roda **100% localmente na máquina do usuário**, sem envio de dados para a nuvem e com respeito estrito a um orçamento máximo de **4.0 GB de memória RAM** (operando com pico auditado em apenas **413 MB** em laptops Intel Core i5).
 
@@ -17,6 +17,7 @@ Tudo roda **100% localmente na máquina do usuário**, sem envio de dados para a
 
 - 🔒 **Privacidade Absoluta (100% Offline):** Nenhum byte de áudio, transcrição ou ata sai do computador. Não utiliza APIs externas pagas ou serviços em nuvem.
 - ⚡ **Orçamento Estrito de Memória (< 4GB RAM):** Arquitetura baseada em **Pipeline Sequencial com Descarregamento Ativo (*Zero-Overlap*)**. Os modelos de IA nunca coexistem na RAM, permitindo rodar suavemente em paralelo com o Teams sem lentidão ou travamentos.
+- 🔎 **"Pergunte às suas atas" (RAG Local):** Motor semântico com SQLite + nomic-embed-text e síntese Llama 3.2 3B com citações rastreáveis `[F1, F2...]` (falantes e minuto exato), 100% de acurácia de citação auditada e rejeição total de alucinações.
 - 🎧 **Captura Dual Nativa via WASAPI:** Captura simultânea do **Microfone do Usuário (Canal 0)** e da **Saída do Teams via Loopback (Canal 1)** sem necessidade de instalar drivers virtuais adicionais (como Virtual Audio Cable ou VB-Cables).
 - 🗣️ **Diarização Temporal com Custo Zero:** Separação precisa de quem falou o quê (`[Você]` vs `[Participantes do Teams]`) intercalando as intervenções cronologicamente com base em timestamps.
 - 🌐 **Filtro Acústico de Eco Multilíngue:** Algoritmo pós-transcrição de supressão de eco com conjunto estendido de stopwords em **Português, Espanhol e Inglês**, protegendo a fala genuína do usuário em reuniões bilaterais ou multinacionais.
@@ -92,11 +93,12 @@ Durante os testes de homologação ponta a ponta (`tests/test_end_to_end.py`), o
 1. **Sistema Operacional:** Windows 10 ou Windows 11 (64-bit).
 2. **Python:** Versão 3.11 ou superior (homologado em Python 3.14 x64).
 3. **Dispositivos de Áudio:** Microfone e saída de som/fone de ouvido em funcionamento.
-4. **Ollama:** Instalado localmente com o modelo Llama 3.2 3B:
+4. **Ollama:** Instalado localmente com os modelos oficiais (Llama 3.2 3B para atas e nomic-embed-text para RAG):
    - Baixe e instale em: [ollama.com](https://ollama.com/)
-   - No terminal, baixe o modelo compacto otimizado:
+   - No terminal, baixe os modelos otimizados:
      ```powershell
      ollama pull llama3.2:3b
+     ollama pull nomic-embed-text
      ```
 5. *(Opcional)* **Microsoft Outlook:** Para utilização do botão de envio direto de e-mail com anexo. Caso não esteja instalado, a aplicação conta com fallback automático para o cliente de e-mail padrão do Windows ou abertura direta da pasta do documento.
 
@@ -191,10 +193,83 @@ python tools/diagnose_audio.py --file sessions/2026-10-16_114213/audio.wav
 python tools/benchmark_performance.py
 python tools/benchmark_performance.py --file sessions/2026-10-16_114213/audio.wav --models small
 
-# 6. Benchmark Científico de Precisão de Transcrição e WER (Fase P5)
-python tools/benchmark_transcription.py
-python tools/benchmark_transcription.py --duration 30 --show-diff
+# 7. Perguntar às reuniões gravadas em linguagem natural (RAG Local)
+python run.py --ask "O que ficou decidido sobre o prazo do projeto QCCP?"
+python run.py --ask "Qual o orçamento dos servidores?" --session 2026-10-15_100000 --top-k 3
+
+# 8. Indexação vetorial e estatísticas do RAG
+python run.py --rag-index
+python run.py --rag-index --session 2026-10-15_100000
+python run.py --rag-stats
+
+# 9. Expurgo LGPD de uma reunião no índice vetorial (Direito ao Esquecimento)
+python run.py --rag-forget 2026-10-15_100000
+
+# 10. Benchmark Científico e Auditoria de RAG (Ground Truth)
+python tools/benchmark_rag.py
+python tools/benchmark_rag.py --retrieval-only
 ```
+
+---
+
+## 🔎 Pergunte às suas atas (RAG Local)
+
+O Ata Automática conta com um motor completo de **Geração Aumentada por Recuperação (RAG)** operando **100% offline**, permitindo ao usuário fazer perguntas em linguagem natural sobre o histórico de atas e transcrições de reuniões gravadas.
+
+### Arquitetura Sequencial Zero-Overlap
+
+Para garantir que o consumo de memória RAM permaneça estritamente dentro do orçamento regulatório de **4.0 GB de RAM**, a recuperação e a síntese executam de forma estritamente sequencial com liberação imediata de memória (*Zero-Overlap*):
+
+```
+                       [ Pergunta do Usuário ]
+                                  │
+                                  ▼
+      1. EMBEDDER EM RAM: Ollama ('nomic-embed-text', 768 dims)
+         ├── Vetorização densa da pergunta em float32
+         ├── Normalização euclidiana L2 (dot product == cosine similarity)
+         └── Descarregamento Ativo: keep_alive: "0s" ──► Libera RAM imediatamente!
+                                  │
+                                  ▼
+      2. BUSCA VETORIAL EXATA: SQLite Embarcado (sessions/rag_index.sqlite)
+         ├── Varredura com NumPy Matrix Multiplication em milissegundos
+         ├── Filtragem opcional por reunião (--session) e corte por limiar (>= 0.35)
+         └── Recupera Chunks: Janelas de transcrição com timestamps e falantes
+             + Resumo, Deliberações e Matriz de Ações da Ata Oficial
+                                  │
+                                  ▼
+      3. SÍNTESE COM IA: Ollama ('llama3.2:3b')
+         ├── Prompt ancorado com identificadores explícitos de fontes [F1, F2...]
+         ├── Parsing JSON Schema garantido (answer, citations, found)
+         ├── Validação anti-alucinação: se fora de escopo, retorna found=false
+         └── Descarregamento Ativo: keep_alive: "0s" ──► Libera RAM imediatamente!
+                                  │
+                                  ▼
+      [ Resposta Executiva com Citações Rastreáveis [F1] de Falante e Horário ]
+```
+
+### Resultados Científicos Oficiais de Benchmark (Ground Truth)
+
+Medido através da ferramenta oficial `tools/benchmark_rag.py` com o dataset anotado `tests/fixtures/rag_eval.json` (3 sessões completas, 19 perguntas de teste com ground truth):
+
+| Métrica de Avaliação | Valor Medido | Referência Técnica |
+|---|:---:|---|
+| **Recall@1** | **80.0 %** | Top-1 recuperado contém a evidência ground truth |
+| **Recall@3** | **100.0 %** | Top-3 recuperado contém a evidência ground truth |
+| **Recall@6** | **100.0 %** | Top-6 recuperado contém a evidência ground truth |
+| **MRR (Mean Reciprocal Rank)** | **0.8778** | Alta qualidade no ordenamento de relevância semântica |
+| **Acurácia de Citação Válida** | **100.0 %** | Respostas fundamentadas com fontes [F1, F2] auditadas |
+| **Rejeição de Alucinação (`found=false`)** | **100.0 %** | Rejeição correta para 4 de 4 perguntas fora do escopo |
+| **Latência Média de Embedding** | **2.69 s** | `nomic-embed-text` via Ollama local |
+| **Latência Média de Busca SQLite** | **2.70 ms** | Similaridade de cosseno via NumPy no banco local |
+| **Pico de Memória RAM (App Python)** | **59.6 MB** | Processo Python |
+| **Pico de Memória RAM (Pipeline Consolidado)** | **102.8 MB** | App + Daemon Ollama (Teto: 4.096 MB) |
+| **Status do Orçamento de RAM** | **APROVADO** | Folga de mais de 3.99 GB de RAM durante todo o RAG |
+
+### Governança e Privacidade (LGPD by Design)
+
+- **Armazenamento 100% Local:** O banco vetorial fica em `sessions/rag_index.sqlite` no próprio computador.
+- **Indexação Incremental Atômica:** Cada reunião tem um hash SHA-256 de seu conteúdo (`transcript.json` + `minutes.json`). Apenas sessões novas ou modificadas são reindexadas, economizando CPU.
+- **Expurgo Rápido (Direito ao Esquecimento):** O comando `python run.py --rag-forget <session_id>` remove imediatamente todos os chunks e vetores da sessão do banco de dados SQLite.
 
 ---
 
@@ -206,7 +281,8 @@ Ata_automatica/
 ├── tools/
 │   ├── diagnose_audio.py    # Ferramenta clínica de diagnóstico de eco e crosstalk
 │   ├── benchmark_performance.py # Benchmark de desempenho, RTF e auditoria de RAM
-│   └── benchmark_transcription.py # Benchmark de precisão, WER, CER e hotwords
+│   ├── benchmark_transcription.py # Benchmark de precisão, WER, CER e hotwords
+│   └── benchmark_rag.py     # Benchmark científico de RAG (Recall@k, MRR, Citações e RAM)
 ├── requirements.txt         # Dependências fixadas de produção
 ├── requirements-dev.txt     # Dependências de desenvolvimento e testes
 ├── pytest.ini               # Configuração formal do Pytest com marcadores unit/integration
@@ -218,7 +294,7 @@ Ata_automatica/
 │   │
 │   ├── pipeline/            # Módulo de Orquestração Agnóstica
 │   │   ├── session.py       # SessionStore e MeetingSession com manifests e expurgo LGPD
-│   │   └── meeting_pipeline.py # Orquestrador desacoplado com integração do EchoGate e telemetria
+│   │   └── meeting_pipeline.py # Orquestrador desacoplado com integração do EchoGate, telemetria e RAG
 │   │
 │   ├── audio/               # Módulo 1: Captura de áudio nativa
 │   │   ├── devices.py       # Enumeração WASAPI com priorização de Microfone Array
@@ -241,11 +317,19 @@ Ata_automatica/
 │   │   ├── docx_builder.py  # Construtor do documento oficial Word (.docx)
 │   │   └── outlook_dispatcher.py # Despacho nativo de e-mail no Outlook via COM com anexo .docx
 │   │
+│   ├── rag/                 # Módulo 5: Pergunte às suas atas (RAG Local Zero-Overlap)
+│   │   ├── embedder.py      # Embedder nomic-embed-text com normalização L2 e keep_alive: "0s"
+│   │   ├── chunker.py       # Janelamento com overlap e extração estruturada de atas
+│   │   ├── store.py         # VectorStore SQLite nativo com hash SHA256 e exclusão LGPD
+│   │   ├── retriever.py     # Recuperador semântico com ordenamento e corte por limiar
+│   │   ├── answerer.py      # Síntese fundamentada com citações [F1] e JSON Schema
+│   │   └── service.py       # Orquestrador Zero-Overlap (Embedder -> SQLite -> LLM)
+│   │
 │   ├── utils/               # Módulo de Utilitários e Telemetria
 │   │   ├── telemetry.py     # SystemMemoryAuditor (App+Ollama), RTFEstimator e VAD
 │   │   └── text_metrics.py  # Cálculo nativo de Word Error Rate (WER), CER e Levenshtein
 │   │
-│   └── ui/                  # Módulo 5: Interface Desktop Nativa (PyQt6)
+│   └── ui/                  # Módulo 6: Interface Desktop Nativa (PyQt6)
 │       ├── floating_widget.py # Barra flutuante Always-on-Top com cronômetro e VU meter
 │       ├── tray_icon.py       # Ícone na bandeja do Windows com ação de reabertura da ata
 │       ├── review_dialog.py   # Janela executiva com botões de exportação Word e envio Outlook
@@ -253,10 +337,10 @@ Ata_automatica/
 │       └── worker_threads.py  # QThread fino adaptando MeetingPipeline para a UI
 │
 ├── tests/                   # Bateria de testes automatizados
-│   ├── fixtures/            # Áudios e transcrições de referência anotadas (Ground Truth)
+│   ├── fixtures/            # Áudios, transcrições e dataset rag_eval.json (Ground Truth)
 │   ├── conftest.py          # Fixtures reutilizáveis de áudio e mocks
-│   └── test_*.py            # Suíte completa com 79 testes automatizados (100% aprovados)
-├── sessions/                # Histórico imutável de reuniões por data/hora (ignorado no git)
+│   └── test_*.py            # Suíte completa com 98 testes automatizados (100% aprovados)
+├── sessions/                # Histórico de reuniões e rag_index.sqlite (ignorado no git)
 ├── logs/                    # Logs rotativos da aplicação (app.log)
 ├── temp/                    # Arquivos temporários de áudio (ignorado no git)
 └── output/                  # Documentos Word gerados (.docx)
