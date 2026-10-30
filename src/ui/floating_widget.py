@@ -56,14 +56,18 @@ class DualVUMeterWidget(QWidget):
         painter.drawRoundedRect(0, 0, self.width(), self.height(), 4, 4)
 
         # Canal 1: Microfone (Você) - Barra Superior (Verde/Azul)
-        mic_width = int((self.width() - 8) * self.mic_level)
+        # Aplica curva perceptual de fala para que RMS de voz humana (-30dBFS) seja visível no display
+        import math
+        scaled_mic = min(1.0, math.sqrt(self.mic_level) * 2.5) if self.mic_level > 0.0005 else 0.0
+        mic_width = int((self.width() - 8) * scaled_mic)
         if mic_width > 0:
             painter.setBrush(QBrush(QColor("#2ECC71")))  # Verde esmeralda
             painter.setPen(Qt.PenStyle.NoPen)
             painter.drawRoundedRect(4, 4, mic_width, 6, 2, 2)
 
         # Canal 2: Teams (Participantes) - Barra Inferior (Azul Aço)
-        teams_width = int((self.width() - 8) * self.teams_level)
+        scaled_teams = min(1.0, math.sqrt(self.teams_level) * 2.5) if self.teams_level > 0.0005 else 0.0
+        teams_width = int((self.width() - 8) * scaled_teams)
         if teams_width > 0:
             painter.setBrush(QBrush(QColor("#3498DB")))  # Azul
             painter.setPen(Qt.PenStyle.NoPen)
