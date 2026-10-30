@@ -273,6 +273,17 @@ class MeetingPipeline:
             else:
                 docx_path = self.session.docx_path
 
+            # Auto-indexação RAG pós-exportação (se ativado nas preferências)
+            # Uma falha na indexação gera apenas um aviso no log e NUNCA interrompe a ata gerada
+            if getattr(self.settings, "rag_auto_index", True):
+                try:
+                    self._emit_progress("Indexando reunião no RAG local ('Pergunte às suas atas')...", 98)
+                    from src.rag.service import RagService
+                    rag_svc = RagService()
+                    rag_svc.index_session(self.session)
+                except Exception as rag_err:
+                    logger.warning("Aviso: Falha ao indexar sessão no RAG local (%s). A ata não foi afetada.", rag_err)
+
             self._emit_progress("Processamento concluído com sucesso!", 100)
             self.session.save_manifest({
                 "status": "completed",

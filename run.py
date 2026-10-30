@@ -75,7 +75,7 @@ if sys.platform == "win32":
 from PyQt6.QtWidgets import QApplication, QMessageBox
 from PyQt6.QtCore import Qt
 
-from src.config import OUTPUT_DIR, TEMP_DIR, OLLAMA_MODEL, OLLAMA_URL, get_user_settings
+from src.config import OUTPUT_DIR, TEMP_DIR, OLLAMA_MODEL, OLLAMA_EMBED_MODEL, OLLAMA_URL, get_user_settings
 from src.audio.devices import get_default_devices
 from src.audio.recorder import DualAudioRecorder
 from src.minutes.ollama_client import OllamaClient
@@ -404,6 +404,12 @@ def run_preflight_checks() -> bool:
                 print(f"  [OK] Modelo alvo '{OLLAMA_MODEL}' localizado e pronto.")
             else:
                 print(f"  [AVISO] Modelo '{OLLAMA_MODEL}' nao encontrado na lista. Execute: 'ollama pull {OLLAMA_MODEL}'")
+
+            has_embed = any(OLLAMA_EMBED_MODEL in m for m in models)
+            if has_embed:
+                print(f"  [OK] Modelo RAG '{OLLAMA_EMBED_MODEL}' localizado e pronto.")
+            else:
+                print(f"  [DICA] Para usar 'Pergunte às suas atas' (RAG), baixe o modelo: 'ollama pull {OLLAMA_EMBED_MODEL}'")
         except Exception:
             pass
     else:
@@ -486,6 +492,92 @@ def handle_reprocess(session_id: str, from_stage_str: str):
         sys.exit(1)
 
 
+def handle_rag_index(session_id: Optional[str] = None):
+    """Indexa sessões de reunião no banco vetorial SQLite do RAG."""
+    from src.rag.service import RagService
+    from src.pipeline.session import SessionStore
+    service = RagService()
+    if session_id:
+        store = SessionStore()
+        session = store.get_session(session_id)
+        if not session:
+            print(f"\n[ERRO] Sessão '{session_id}' não encontrada em sessions/.")
+            sys.exit(1)
+        print(f"\n[RAG] Indexando sessão '{session_id}'...")
+        success = service.index_session(session, force=True)
+        if success:
+            print(f"  [OK] Sessão '{session_id}' indexada com sucesso!")
+        else:
+            print(f"  [AVISO] A sessão '{session_id}' não contém transcrição ou ata para indexar.")
+    else:
+        print("\n[RAG] Verificando e indexando sessões pendentes no índice vetorial...")
+        res = service.index_all_pending()
+        print(f"  [OK] Concluído: {res['indexed']} indexada(s), {res['skipped']} já atualizada(s), {res['failed']} falha(s).")
+    print()
+
+
+def handle_ask(query: str, session_id: Optional[str] = None, top_k: int = 6):
+    """Executa consulta semântica com citação precisa de fontes."""
+    from src.rag.service import RagService
+    service = RagService()
+
+    filter_info = f" (Sessão: {session_id})" if session_id else " (Todas as sessões)"
+    print("\n" + "=" * 80)
+    print(f"  🔎 PERGUNTE ÀS SUAS ATAS{filter_info}")
+    print(f"  Pergunta: \"{query}\"")
+    print("=" * 80)
+
+    try:
+        ans = service.ask(query=query, session_id=session_id, top_k=top_k)
+        print("\nRESPOSTA:\n")
+        print(ans.answer)
+        print("\n" + "-" * 80)
+
+        if ans.sources and ans.found:
+            print("FONTES E TRECHOS RELEVANTES:\n")
+            for src in ans.sources:
+                speakers_fmt = ", ".join(src.speakers) if src.speakers else "Participantes"
+                print(f"  [{src.id}] Sessão: {src.session_id} · Horário: {src.timestamp_str} · {speakers_fmt}")
+                print(f"      Trecho: \"{src.excerpt}\"")
+                print(f"      Similaridade: {src.score:.1%}\n")
+        elif not ans.found:
+            print("Dica: Verifique se as reuniões desejadas foram gravadas e indexadas com '--rag-index'.\n")
+
+        print("=" * 80 + "\n")
+    except Exception as e:
+        print(f"\n[ERRO] Falha ao processar pergunta via RAG: {e}\n")
+        sys.exit(1)
+
+
+def handle_rag_forget(session_id: str):
+    """Remove permanentemente os dados da sessão do índice vetorial (LGPD)."""
+    from src.rag.service import RagService
+    service = RagService()
+    print(f"\n[LGPD] Solicitando expurgo dos dados da sessão '{session_id}' do índice vetorial...")
+    removed = service.forget_session(session_id)
+    if removed:
+        print(f"  [OK] Sessão '{session_id}' e todos os seus vetores foram purgados com sucesso do RAG.\n")
+    else:
+        print(f"  [AVISO] A sessão '{session_id}' não foi localizada no índice vetorial.\n")
+
+
+def handle_rag_stats():
+    """Exibe estatísticas consolidadas do banco vetorial."""
+    from src.rag.service import RagService
+    service = RagService()
+    stats = service.stats()
+    print("\n" + "=" * 65)
+    print("  ESTATÍSTICAS DO ÍNDICE VETORIAL RAG (sessions/rag_index.sqlite)")
+    print("=" * 65)
+    print(f"  Arquivo do Banco:        {stats['db_path']}")
+    print(f"  Tamanho do Índice:       {stats['file_size_kb']} KB ({stats['file_size_bytes']} bytes)")
+    print(f"  Sessões Indexadas:       {stats['sessions_count']}")
+    print(f"  Total de Chunks:         {stats['chunks_count']}")
+    print(f"    - De Transcrições:     {stats['transcript_chunks']}")
+    print(f"    - De Atas Executivas:  {stats['minutes_chunks']}")
+    print("=" * 65 + "\n")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Ata Automática para Microsoft Teams")
     parser.add_argument(
@@ -533,6 +625,44 @@ def main():
         choices=["transcribe", "merge", "generate", "export"],
         help="Estágio inicial para reprocessamento (padrão: transcribe).",
     )
+    parser.add_argument(
+        "--rag-index",
+        action="store_true",
+        help="Indexa sessões de reunião no índice vetorial RAG local.",
+    )
+    parser.add_argument(
+        "--session",
+        type=str,
+        default=None,
+        metavar="SESSION_ID",
+        help="Especifica o ID da sessão para --rag-index ou --ask.",
+    )
+    parser.add_argument(
+        "--ask",
+        type=str,
+        default=None,
+        metavar="PERGUNTA",
+        help="Realiza uma pergunta em linguagem natural sobre as reuniões gravadas (RAG).",
+    )
+    parser.add_argument(
+        "--top-k",
+        type=int,
+        default=6,
+        metavar="N",
+        help="Número de trechos mais relevantes a recuperar no RAG (padrão: 6).",
+    )
+    parser.add_argument(
+        "--rag-forget",
+        type=str,
+        default=None,
+        metavar="SESSION_ID",
+        help="Expurga todos os dados de uma sessão do índice RAG conforme LGPD.",
+    )
+    parser.add_argument(
+        "--rag-stats",
+        action="store_true",
+        help="Exibe estatísticas consolidadas do índice vetorial RAG local.",
+    )
 
     args = parser.parse_args()
 
@@ -548,6 +678,22 @@ def main():
 
     if args.reprocess:
         handle_reprocess(session_id=args.reprocess, from_stage_str=args.from_stage)
+        sys.exit(0)
+
+    if args.rag_index:
+        handle_rag_index(session_id=args.session)
+        sys.exit(0)
+
+    if args.ask:
+        handle_ask(query=args.ask, session_id=args.session, top_k=args.top_k)
+        sys.exit(0)
+
+    if args.rag_forget:
+        handle_rag_forget(session_id=args.rag_forget)
+        sys.exit(0)
+
+    if args.rag_stats:
+        handle_rag_stats()
         sys.exit(0)
 
     run_preflight_checks()
