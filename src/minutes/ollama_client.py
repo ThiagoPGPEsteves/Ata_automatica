@@ -139,6 +139,8 @@ class OllamaClient:
             if callback:
                 # Modo streaming: timeout de conexão (30s) e leitura tolerante a cold-start do modelo e compilação de gramática em CPU
                 chunk_read_timeout = max(self.timeout, 180.0)
+                max_total_stream_timeout = max(self.timeout * 3.0, 1200.0)
+                last_chunk_time = start_stream_time
                 full_text = []
                 last_chunk: Dict[str, Any] = {}
 
@@ -156,11 +158,17 @@ class OllamaClient:
                     response.raise_for_status()
 
                     for line in response.iter_lines():
-                        if time.time() - start_stream_time > self.timeout:
+                        now = time.time()
+                        if now - last_chunk_time > self.timeout:
                             raise TimeoutError(
-                                f"Tempo limite total ({self.timeout}s) excedido durante o streaming do Ollama."
+                                f"Tempo limite de inatividade ({self.timeout}s) excedido durante o streaming do Ollama."
+                            )
+                        if now - start_stream_time > max_total_stream_timeout:
+                            raise TimeoutError(
+                                f"Tempo limite total ({max_total_stream_timeout}s) excedido durante o streaming do Ollama."
                             )
                         if line:
+                            last_chunk_time = now
                             chunk = json.loads(line.decode("utf-8"))
                             token = chunk.get("response", "")
                             full_text.append(token)

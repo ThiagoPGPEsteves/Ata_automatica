@@ -267,8 +267,8 @@ def test_map_reduce_fallback_when_map_returns_empty_notes():
 
     # Cria transcrição longa para disparar Map-Reduce
     speech_turns = [
-        f"[{i:02d}:00:00] [Thiago]: Discutindo bloco longo {i} com informações importantes."
-        for i in range(100)
+        f"[{i:02d}:00:00] [Thiago]: Discutindo bloco longo {i} com informações importantes sobre RWA e capital."
+        for i in range(150)
     ]
     long_transcript = "\n".join(speech_turns)
 
@@ -293,6 +293,47 @@ def test_map_reduce_fallback_when_map_returns_empty_notes():
     assert isinstance(minutes, MeetingMinutes)
     assert "Fallback" in minutes.title or "Reunião com Map Quebrado" in minutes.title or len(raw_md) > 0
     assert "Fallback acionado com sucesso" in raw_md
+
+
+def test_map_reduce_preserves_map_notes_when_reduce_times_out():
+    """Valida que quando o Map tem sucesso mas o Reduce sofre TimeoutError, as notas do Map são consolidadas sem perda."""
+    mock_client = MagicMock()
+    mock_client.is_available.return_value = True
+
+    speech_turns = [
+        f"[{i:02d}:00:00] [Thiago]: Discutindo bloco longo {i} com informações importantes sobre RWA e capital."
+        for i in range(150)
+    ]
+    long_transcript = "\n".join(speech_turns)
+
+    map_response = json.dumps({
+        "topics": [{"topic": "Eficiência de RWA Colômbia", "details": "Mapeamento de 2.9 Bi em TVMs e faturamento."}],
+        "highlights": ["Potencial adicional de 1 Bi via robô"],
+    })
+
+    def mock_generate_reduce_timeout(**kwargs):
+        # Se for chamada do Reduce (stream_callback presente ou THEME_SUMMARY_SCHEMA)
+        if kwargs.get("stream_callback") is not None or "title" in kwargs.get("response_format", {}).get("properties", {}):
+            raise TimeoutError("Tempo limite total (300.0s) excedido durante o streaming do Ollama.")
+        return map_response
+
+    mock_client.generate.side_effect = mock_generate_reduce_timeout
+
+    generator = MinutesGenerator(ollama_client=mock_client)
+    minutes, raw_md = generator.generate(
+        transcript_text=long_transcript,
+        meeting_date="06/11/2026",
+        user_speaker_name="Thiago",
+        output_format="theme_summary",
+    )
+
+    assert isinstance(minutes, MeetingMinutes)
+    assert minutes.is_theme_summary is True
+    assert len(minutes.topics) == 1
+    assert minutes.topics[0]["topic"] == "Eficiência de RWA Colômbia"
+    assert "2.9 Bi" in minutes.topics[0]["details"]
+    assert "Potencial adicional de 1 Bi via robô" in minutes.next_steps
+
 
 
 if __name__ == "__main__":

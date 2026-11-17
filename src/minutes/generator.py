@@ -583,16 +583,106 @@ class MinutesGenerator:
             return minutes, markdown_output
 
         except Exception as e:
-            logger.warning("Falha na consolidação Reduce (%s). Recorrendo a fallback consolidado.", e)
-            return self._fallback_markdown_generate(
-                transcript_text="\n\n".join(chunks),
+            logger.warning(
+                "Falha na consolidação Reduce (%s). Consolidando notas já extraídas na etapa Map (%d blocos).",
+                e,
+                len(chunk_notes_list),
+            )
+            return self._consolidate_chunk_notes_fallback(
+                chunk_notes_list=chunk_notes_list,
                 meeting_title=meeting_title,
                 meeting_date=meeting_date,
-                meeting_duration=meeting_duration,
+                user_speaker_name=user_speaker_name,
                 output_format=output_format,
-                progress_callback=progress_callback,
-                token_callback=token_callback,
             )
+
+    def _consolidate_chunk_notes_fallback(
+        self,
+        chunk_notes_list: List[Dict[str, Any]],
+        meeting_title: Optional[str],
+        meeting_date: Optional[str],
+        user_speaker_name: str,
+        output_format: str = OUTPUT_FORMAT_MINUTES,
+    ) -> Tuple[MeetingMinutes, str]:
+        """
+        Consolida deterministicamente as notas já extraídas pelos blocos do Map
+        quando a etapa final de Reduce sofre timeout ou erro, preservando todo o
+        trabalho analítico já processado pela IA nos blocos.
+        """
+        merged_topics: List[Dict[str, str]] = []
+        seen_topics: Dict[str, int] = {}
+        merged_decisions: List[Any] = []
+        merged_actions: List[Any] = []
+        merged_highlights: List[str] = []
+
+        for note in chunk_notes_list:
+            for t in note.get("topics", []):
+                if not isinstance(t, dict):
+                    continue
+                t_name = str(t.get("topic", "")).strip()
+                t_det = str(t.get("details", "")).strip()
+                if not t_name and not t_det:
+                    continue
+                key = t_name.lower()
+                if key in seen_topics:
+                    idx = seen_topics[key]
+                    if t_det and t_det not in merged_topics[idx]["details"]:
+                        merged_topics[idx]["details"] += f" {t_det}"
+                else:
+                    seen_topics[key] = len(merged_topics)
+                    merged_topics.append({"topic": t_name or "Tópico Discutido", "details": t_det})
+
+            for d in note.get("decisions", []):
+                if d not in merged_decisions:
+                    merged_decisions.append(d)
+
+            for a in note.get("action_items", []):
+                if a not in merged_actions:
+                    merged_actions.append(a)
+
+            for h in note.get("highlights", []):
+                h_str = str(h).strip()
+                if h_str and h_str not in merged_highlights:
+                    merged_highlights.append(h_str)
+
+        topic_names = [t["topic"] for t in merged_topics[:6] if t.get("topic")]
+        default_title = "Resumo de Temas" if output_format == OUTPUT_FORMAT_THEME_SUMMARY else "Ata de Reunião"
+        if meeting_title and meeting_title not in ("Ata de Reunião", "Resumo de Temas", "Reunião Microsoft Teams"):
+            resolved_title = meeting_title
+        elif topic_names:
+            resolved_title = " / ".join(topic_names[:2])
+        else:
+            resolved_title = default_title
+
+        summary_parts = []
+        for t in merged_topics[:4]:
+            if t.get("details"):
+                first_sent = t["details"].split(". ")[0].strip()
+                if not first_sent.endswith("."):
+                    first_sent += "."
+                summary_parts.append(f"{t['topic']}: {first_sent}")
+        exec_summary = (
+            " ".join(summary_parts)
+            if summary_parts
+            else f"Síntese consolidada a partir de {len(chunk_notes_list)} blocos analisados da reunião."
+        )
+
+        consolidated_dict: Dict[str, Any] = {
+            "title": resolved_title,
+            "date": meeting_date or "",
+            "participants": [user_speaker_name, "Participantes da Reunião"],
+            "executive_summary": exec_summary,
+            "topics": merged_topics,
+            "decisions": merged_decisions,
+            "action_items": merged_actions,
+            "next_steps": merged_highlights,
+            "document_type": output_format,
+        }
+        minutes = MeetingMinutes.from_dict(consolidated_dict)
+        minutes.document_type = output_format
+        markdown_output = minutes_to_markdown(minutes)
+        minutes.raw_markdown = markdown_output
+        return minutes, markdown_output
 
     def _fallback_markdown_generate(
         self,

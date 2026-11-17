@@ -82,7 +82,7 @@ DEFAULT_CORPORATE_GLOSSARY = (
 OLLAMA_URL = "http://localhost:11434"
 OLLAMA_MODEL = "llama3.2:3b"
 OLLAMA_EMBED_MODEL = "nomic-embed-text"
-OLLAMA_TIMEOUT = 300.0  # 5 minutos de tolerância para reuniões longas em CPU
+OLLAMA_TIMEOUT = 600.0  # 10 minutos de tolerância por etapa para reuniões longas em CPU
 OLLAMA_KEEP_ALIVE = "0s"  # Descarrega o modelo da RAM imediatamente após a geração
 OLLAMA_NUM_CTX = 4096     # Janela explícita de contexto (evita truncamento silencioso de transcrições longas)
 

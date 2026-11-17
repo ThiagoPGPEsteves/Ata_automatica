@@ -13,7 +13,7 @@ Sua tarefa é analisar a transcrição da reunião realizada no Microsoft Teams 
 Diretrizes obrigatórias:
 1. FIDELIDADE E PRECISÃO: Baseie-se estritamente no conteúdo que foi discutido. Não invente decisões, prazos ou tarefas não mencionadas.
 2. DISTINÇÃO DE INTERLOCUTORES: A transcrição identifica "[Você]" e "[Participantes da Reunião]". Use essas referências e nomes citados para atribuir responsabilidades corretamente.
-3. CONTEXTO MULTILÍNGUE (ESPANHOL E PORTUGUÊS): A reunião pode contar com participantes falando em Espanhol e/ou Português. Compreenda com precisão ambos os idiomas e redija a ata oficial consolidada em Língua Portuguesa (pt-BR), preservando termos técnicos, métricas e nomes próprios sem distorções.
+3. CONTEXTO MULTILÍNGUE (ESPANHOL E PORTUGUÊS): A reunião pode contar com participantes falando em Espanhol e/ou Português. Compreenda com precisão ambos os idiomas e redija a ata oficial consolidada em Língua Portuguesa (pt-BR), preservando termos técnicos, métricas e nomes próprios sem distorções (ex.: mantenha "AWS Transfer Family" sem traduzir como "transferência familiar", "IRB" como Modelos Internos de Risco de Crédito e NUNCA invente significados para siglas bancárias como RWA, EAD, CCP, IFI, TVM, RUT, CGI/CJ).
 4. CONCISÃO EXECUTIVA: Seja direto, claro e profissional. Evite termos coloquiais e NUNCA repita frases ou parágrafos.
 5. TÍTULO REPRESENTATIVO: No cabeçalho H1, defina um título claro e específico baseado no assunto principal da reunião (ex: "# ATA DE REUNIÃO: Revisão de Exposição Colômbia e CCPs"). Evite títulos genéricos como "Alinhamento Geral" ou "Reunião de Alinhamento".
 6. ESTRUTURA PADRÃO: Sua resposta DEVE conter obrigatoriamente as seguintes seções em Markdown:
@@ -34,7 +34,7 @@ Sua missão é analisar a transcrição da reunião realizada no Microsoft Teams
 Diretrizes obrigatórias:
 1. FOCO NOS TEMAS E DISCUSSÕES: Sintetize em profundidade os assuntos, ideias, teses, pontos de vista e o contexto de cada pauta abordada.
 2. SEM OBRIGATORIEDADE DE DECISÕES OU TAREFAS: Esta reunião é informativa, exploratória ou de alinhamento. NÃO invente decisões tomadas nem planos de ação se eles não ocorreram naturalmente. Caso deliberações ou tarefas pontuais tenham sido expressas claramente, você pode citá-las de forma sucinta nos tópicos, mas nunca force tabelas ou estruturas artificiais de tarefas.
-3. CONTEXTO MULTILÍNGUE (ESPANHOL E PORTUGUÊS): A reunião pode contar com participantes se comunicando em Espanhol e/ou Português. Compreenda com precisão as falas em ambos os idiomas e traduza/sintetize tudo de forma fluida, executiva e profissional em Língua Portuguesa (pt-BR), mantendo termos técnicos, métricas e nomes próprios.
+3. CONTEXTO MULTILÍNGUE (ESPANHOL E PORTUGUÊS): A reunião pode contar com participantes se comunicando em Espanhol e/ou Português. Compreenda com precisão as falas em ambos os idiomas e traduza/sintetize tudo de forma fluida, executiva e profissional em Língua Portuguesa (pt-BR), mantendo termos técnicos, métricas e nomes próprios (ex.: preserve "AWS Transfer Family" sem traduzir literalmente, "IRB" como Modelos Internos e NUNCA invente expansões para siglas como RWA, EAD, CCP, IFI, TVM, RUT, CGI/CJ).
 4. CONCISÃO E PROFUNDIDADE: Estruture a síntese de forma clara e analítica, destacando o cerne de cada discussão sem repetições.
 5. ESTRUTURA PADRÃO:
    # RESUMO DE TEMAS: [TÍTULO ESPECÍFICO DA DISCUSSÃO]
@@ -89,7 +89,7 @@ Diretrizes obrigatórias:
 2. VISÃO GERAL: Redija uma visão geral coesa e profissional sintetizando o contexto global dos debates.
 3. CONSOLIDAÇÃO DE TEMAS: Mescle temas correlatos em blocos analíticos ricos e sem repetições.
 4. SEM OBRIGATORIEDADE DE DECISÕES OU AÇÕES: Não invente nem exija tabela de ações ou decisões tomadas.
-5. CONTEXTO MULTILÍNGUE: Consolide o texto final em Português (pt-BR) integrando perfeitamente discussões ocorridas em espanhol e português.
+5. CONTEXTO MULTILÍNGUE: Consolide o texto final em Português (pt-BR) integrando perfeitamente discussões ocorridas em espanhol e português, preservando termos técnicos ("Transfer Family", "IRB", "RWA", "EAD", "CCP", "IFI", "TVM", "RUT") sem traduções literais indevidas e sem inventar significados para siglas.
 """
 
 
@@ -143,7 +143,7 @@ def generate_reduce_prompt(
 ) -> Tuple[str, str]:
     """Gera o prompt para consolidação final de todos os blocos (Reduce) para Ata Executiva."""
     import json
-    notes_json = json.dumps(chunk_notes, ensure_ascii=False, indent=2)
+    notes_json = json.dumps(chunk_notes, ensure_ascii=False, separators=(",", ": "))
     date_str = meeting_date or "Data da gravação"
     dur_str = f" | Duração: {meeting_duration}" if meeting_duration else ""
 
@@ -169,7 +169,7 @@ def generate_theme_reduce_prompt(
 ) -> Tuple[str, str]:
     """Gera o prompt para consolidação final de todos os blocos (Reduce) para Resumo Temático."""
     import json
-    notes_json = json.dumps(chunk_notes, ensure_ascii=False, indent=2)
+    notes_json = json.dumps(chunk_notes, ensure_ascii=False, separators=(",", ": "))
     date_str = meeting_date or "Data da gravação"
     dur_str = f" | Duração: {meeting_duration}" if meeting_duration else ""
 
